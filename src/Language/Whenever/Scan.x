@@ -39,14 +39,17 @@ read { const Read }
 \<\= { const LessEqual }
 \>\= { const GreaterEqual }
 \! { const Not }
-true { const WTrue }
-false { const WFalse }
+true { const (Bool True) }
+false { const (Bool False) }
+\? { const Question }
+\: { const Colon }
 
 {
 
 data Token
   = Int Integer
   | Str String
+  | Bool Bool
   | Defer
   | Again
   | N
@@ -71,8 +74,8 @@ data Token
   | LessEqual
   | GreaterEqual
   | Not
-  | WTrue
-  | WFalse
+  | Question
+  | Colon
   deriving (Eq, Ord, Show, Read)
 
 scan :: String -> [Token]

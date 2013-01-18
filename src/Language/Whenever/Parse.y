@@ -13,6 +13,7 @@ import qualified Data.Map as Map
 %token
   int { S.Int $$ }
   str { S.Str $$ }
+  bool { S.Bool $$ }
   defer { S.Defer }
   again { S.Again }
   n { S.N }
@@ -37,8 +38,8 @@ import qualified Data.Map as Map
   '<=' { S.LessEqual }
   '>=' { S.GreaterEqual }
   '!' { S.Not }
-  true { S.WTrue }
-  false { S.WFalse }
+  '?' { S.Question }
+  ':' { S.Colon }
 
 %%
 
@@ -57,8 +58,11 @@ Commands : Command { [$1] }
 Command : Expr { ($1, Val $ Int 1) }
         | Expr '#' Expr { ($1, $3) }
 
-Expr : Expr '||' Expr1 { Binop Or $1 $3 }
-     | Expr1 { $1 }
+Expr : Expr0 '?' Expr ':' Expr { If $1 $3 $5 }
+     | Expr0 { $1 }
+
+Expr0 : Expr0 '||' Expr1 { Binop Or $1 $3 }
+      | Expr1 { $1 }
 
 Expr1 : Expr1 '&&' Expr2 { Binop And $1 $3 }
       | Expr2 { $1 }
@@ -83,14 +87,13 @@ Expr5 : Expr5 '*' Atom { Binop Mult $1 $3 }
 
 Atom : int { Val (Int $1) }
      | str { Val (Str $1) }
+     | bool { Val (Bool $1) }
      | n '(' Expr ')' { N $3 }
      | u '(' Expr ')' { U $3 }
      | print '(' Expr ')' { Print $3 }
      | read '(' ')' { Read }
      | '!' Atom { Not $2 }
      | '(' Expr ')' { $2 }
-     | true { Val (Bool True) }
-     | false { Val (Bool False) }
 
 {
 

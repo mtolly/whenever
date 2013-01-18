@@ -28,6 +28,7 @@ expr e = case e of
   Print x -> concat ["print(", expr x, ")"]
   N x -> concat ["N(", expr x, ")"]
   U x -> concat ["U(", expr x, ")"]
+  If c t f -> concat ["(", expr c, " ? ", expr t, " : ", expr f, ")"]
 
 stmt :: Stmt -> String
 stmt s = case s of

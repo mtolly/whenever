@@ -31,6 +31,8 @@ data Expr
   -- ^ Returns the number of copies of a line number
   | U Expr
   -- ^ 'Language.Whenever.Base.Int', a codepoint, to a one-character 'Str'
+  | If Expr Expr Expr
+  -- ^ Ternary conditional operator
   deriving (Eq, Ord, Show, Read)
 
 data Binop
@@ -84,6 +86,7 @@ eval e = case e of
   Print x -> evalStr x >>= lift . putStrLn >> return (Int 0)
   N x -> fmap Int $ evalInt x >>= count
   U x -> Str . (:[]) . toEnum . fromIntegral <$> evalInt x
+  If c t f -> evalBool c >>= \b -> eval $ if b then t else f
 
 -- | From standard input, reads either a natural number (sequence of digits),
 -- or a single char (returning its codepoint) if it isn't a digit.
