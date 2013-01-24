@@ -23,7 +23,7 @@ expr e = case e of
       GreaterEqual -> ">="
       Equal -> "=="
       NotEqual -> "!="
-  Not x -> "!" ++ expr x
+  Not x -> '!' : expr x
   Read -> "read()"
   Print x -> concat ["print(", expr x, ")"]
   N x -> concat ["N(", expr x, ")"]

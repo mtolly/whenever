@@ -164,7 +164,7 @@ getStmt n = maybe err snd <$> gets (Map.lookup n)
 -- it is not removed.
 runLine :: LineNumber -> Whenever ()
 runLine n = getStmt n >>= go where
-  go (Defer x s) = evalBool x >>= \b -> if b then return () else go s
+  go (Defer x s) = evalBool x >>= \b -> unless b $ go s
   go (Again x s) = evalBool x >>= \b -> if b then runStmt s else go s
   go (Commands ls) = runStmt (Commands ls) >> addLine n (-1)
 
@@ -172,7 +172,7 @@ runLine n = getStmt n >>= go where
 -- statement isn't executed. An 'Again' clause is executed for its side-effects,
 -- but does nothing, because the line won't be removed to begin with.
 runStmt :: Stmt -> Whenever ()
-runStmt (Defer x s) = evalBool x >>= \b -> if b then return () else runStmt s
+runStmt (Defer x s) = evalBool x >>= \b -> unless b $ runStmt s
 runStmt (Again x s) = evalBool x >> runStmt s
 runStmt (Commands ls) = forM_ ls $ \(x, y) -> do
   n <- evalInt x
