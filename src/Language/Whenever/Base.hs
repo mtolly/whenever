@@ -105,10 +105,9 @@ plus (Str x) y       = Str $ x ++ getStr y
 plus x       (Str y) = Str $ getStr x ++ y
 plus x       y       = Int $ getInt x + getInt y
 
--- | True if two values are exactly equal, or if they are equal when converted
--- with 'getStr'.
+-- | True if two values are equal when converted with 'getStr'.
 equal :: Val -> Val -> Bool
-equal x y = x == y || getStr x == getStr y
+equal x y = getStr x == getStr y
 
 getStr :: Val -> String
 getStr (Str  s) = s
