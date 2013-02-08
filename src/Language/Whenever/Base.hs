@@ -46,8 +46,8 @@ data Binop
   | Greater      -- ^ 'Language.Whenever.Base.Int' comparison
   | LessEqual    -- ^ 'Language.Whenever.Base.Int' comparison
   | GreaterEqual -- ^ 'Language.Whenever.Base.Int' comparison
-  | Equal        -- ^ Exactly equal, or equal after 'getInt'
-  | NotEqual     -- ^ Not exactly equal, and not equal after 'getInt'
+  | Equal        -- ^ True if equal after converted with 'getStr'
+  | NotEqual     -- ^ True if not equal after converted with 'getStr'
   deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
 data Stmt
