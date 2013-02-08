@@ -15,6 +15,7 @@ expr e = case e of
       Sub -> "-"
       Mult -> "*"
       Div -> "/"
+      Rem -> "%"
       Or -> "||"
       And -> "&&"
       Less -> "<"

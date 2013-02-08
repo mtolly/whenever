@@ -29,6 +29,7 @@ import qualified Data.Map as Map
   '-' { S.Minus }
   '*' { S.Star }
   '/' { S.Slash }
+  '%' { S.Percent }
   '||' { S.Or }
   '&&' { S.And }
   '==' { S.Equal }
@@ -83,6 +84,7 @@ Expr4 : Expr4 '+' Expr5 { Binop Plus $1 $3 }
 
 Expr5 : Expr5 '*' Atom { Binop Mult $1 $3 }
       | Expr5 '/' Atom { Binop Div $1 $3 }
+      | Expr5 '%' Atom { Binop Rem $1 $3 }
       | Atom { $1 }
 
 Atom : int { Val (Int $1) }

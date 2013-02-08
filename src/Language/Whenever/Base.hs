@@ -40,6 +40,7 @@ data Binop
   | Sub
   | Mult
   | Div
+  | Rem
   | Or           -- ^ Short-circuit boolean operator
   | And          -- ^ Short-circuit boolean operator
   | Less         -- ^ 'Language.Whenever.Base.Int' comparison
@@ -68,17 +69,18 @@ eval e = case e of
   Val v -> return v
   Binop op x y -> case op of
     Plus         -> liftA2 plus (eval x) (eval y)
-    Sub          -> Int  <$> liftA2 (-)  (evalInt  x) (evalInt  y)
-    Mult         -> Int  <$> liftA2 (*)  (evalInt  x) (evalInt  y)
-    Div          -> Int  <$> liftA2 quot (evalInt  x) (evalInt  y)
+    Sub          -> Int  <$> liftA2 (-)  (evalInt x) (evalInt y)
+    Mult         -> Int  <$> liftA2 (*)  (evalInt x) (evalInt y)
+    Div          -> Int  <$> liftA2 quot (evalInt x) (evalInt y)
+    Rem          -> Int  <$> liftA2 rem  (evalInt x) (evalInt y)
     Or           -> evalBool x >>= \b ->
       Bool <$> if b then return True else evalBool y
     And          -> evalBool x >>= \b ->
       Bool <$> if b then evalBool y else return False
-    Less         -> Bool <$> liftA2 (<)  (evalInt  x) (evalInt  y)
-    Greater      -> Bool <$> liftA2 (>)  (evalInt  x) (evalInt  y)
-    LessEqual    -> Bool <$> liftA2 (<=) (evalInt  x) (evalInt  y)
-    GreaterEqual -> Bool <$> liftA2 (>=) (evalInt  x) (evalInt  y)
+    Less         -> Bool <$> liftA2 (<)  (evalInt x) (evalInt y)
+    Greater      -> Bool <$> liftA2 (>)  (evalInt x) (evalInt y)
+    LessEqual    -> Bool <$> liftA2 (<=) (evalInt x) (evalInt y)
+    GreaterEqual -> Bool <$> liftA2 (>=) (evalInt x) (evalInt y)
     Equal        -> Bool <$> liftA2 equal (eval x) (eval y)
     NotEqual     -> Bool . not <$> liftA2 equal (eval x) (eval y)
   Not x -> Bool . not <$> evalBool x

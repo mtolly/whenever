@@ -30,6 +30,7 @@ read { const Read }
 \- { const Minus }
 \* { const Star }
 \/ { const Slash }
+\% { const Percent }
 \|\| { const Or }
 \&\& { const And }
 \=\= { const Equal }
@@ -65,6 +66,7 @@ data Token
   | Minus
   | Star
   | Slash
+  | Percent
   | Or
   | And
   | Equal
