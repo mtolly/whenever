@@ -15,7 +15,11 @@ Cabal-version:      >= 1.8
 Category:           Data
 
 Library
-  Build-Depends:    base == 4.*, containers, transformers, random, array
+  Build-Depends:    base >= 4.6 && < 5
+                    , containers >= 0.5 && < 0.6
+                    , transformers >= 0.3 && < 0.4
+                    , random >= 1.0 && < 1.1
+                    , array >= 0.4 && < 0.5
   Exposed-modules:  Language.Whenever
                     Language.Whenever.Base
                     Language.Whenever.Scan
@@ -25,7 +29,8 @@ Library
   ghc-options:      -Wall
 
 Executable whenever
-  Build-Depends:    base == 4.*, whenever
+  Build-Depends:    base >= 4.6 && < 5
+                    , whenever
   Main-Is:          whenever.hs
 
 Source-Repository head

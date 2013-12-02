@@ -1,13 +1,14 @@
 module Language.Whenever.Base where
 
-import qualified Data.Map as Map
-import Control.Monad.Trans.State
-import Control.Monad.Trans.Class
-import Control.Applicative
-import Control.Monad
-import System.Random
-import System.IO
+import Control.Applicative ((<$>), liftA2)
+import Control.Monad (forM_, unless, (>=>))
 import Data.Char (isDigit)
+import System.IO (hLookAhead, stdin)
+
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.State (StateT, evalStateT, gets, modify)
+import qualified Data.Map as Map
+import System.Random (getStdRandom, randomR)
 
 type LineNumber = Integer
 type Count = Integer

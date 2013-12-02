@@ -7,8 +7,8 @@ module Language.Whenever
 ) where
 
 import Language.Whenever.Base
-import Language.Whenever.Scan (scan)
 import Language.Whenever.Parse (parse)
+import Language.Whenever.Scan (scan)
 import Language.Whenever.Unparse
 
 fromString :: String -> Program

@@ -1,9 +1,10 @@
 {
 module Language.Whenever.Parse (parse) where
 
-import qualified Language.Whenever.Scan as S
-import Language.Whenever.Base
 import qualified Data.Map as Map
+
+import Language.Whenever.Base
+import qualified Language.Whenever.Scan as S
 }
 
 %name parse
