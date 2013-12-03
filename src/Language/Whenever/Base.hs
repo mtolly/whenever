@@ -1,4 +1,25 @@
-module Language.Whenever.Base where
+module Language.Whenever.Base
+( LineNumber
+, Count
+, Val(..)
+, Expr(..)
+, Binop(..)
+, Stmt(..)
+, Program
+, Context
+, Whenever
+, eval
+, count
+, setCount
+, addLine
+, getStmt
+, runLine
+, runStmt
+, select
+, run
+, makeContext
+, runProgram
+) where
 
 import Control.Applicative ((<$>), liftA2)
 import Control.Monad (forM_, unless, (>=>))
@@ -196,11 +217,14 @@ select = do
       i <- lift $ getStdRandom $ randomR (0, length ns - 1)
       return $ Just $ ns !! i
 
+-- | Runs until no lines have a positive number of copies left.
 run :: Whenever ()
 run = select >>= maybe (return ()) (\n -> runLine n >> run)
 
+-- | Assigns each line in a program to have 1 copy.
 makeContext :: Program -> Context
 makeContext p = Map.fromList [ (n, (1, s)) | (n, s) <- p ]
 
+-- | Runs a program to completion.
 runProgram :: Program -> IO ()
 runProgram = evalStateT run . makeContext
