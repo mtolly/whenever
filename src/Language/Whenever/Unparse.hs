@@ -19,6 +19,7 @@ expr atom e = case e of
   Val v -> map toLower $ show v
   Append x y -> op "+" x y
   Add x y -> op "+" x y
+  Plus x y -> op "+" x y
   Sub x y -> op "-" x y
   Mult x y -> op "*" x y
   Div x y -> op "/" x y
@@ -29,6 +30,7 @@ expr atom e = case e of
   Greater x y -> op ">" x y
   LessEqual x y -> op "<=" x y
   GreaterEqual x y -> op ">=" x y
+  Equal x y -> op "==" x y
   EqualStr x y -> op "==" x y
   EqualInt x y -> op "==" x y
   EqualBool x y -> op "==" x y
@@ -45,6 +47,12 @@ expr atom e = case e of
   IntToBool x -> expr atom x
   BoolToStr x -> expr atom x
   StrToBool x -> expr atom x
+  AnyToStr x -> expr atom x
+  AnyToInt x -> expr atom x
+  AnyToBool x -> expr atom x
+  StrToAny x -> expr atom x
+  IntToAny x -> expr atom x
+  BoolToAny x -> expr atom x
   where atomize s = if atom then "(" ++ s ++ ")" else s
         op :: (Show a, Show b) => String -> Expr a -> Expr b -> String
         op o x y = atomize $ unwords [expr True x, o, expr True y]

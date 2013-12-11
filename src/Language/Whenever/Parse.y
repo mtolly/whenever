@@ -50,90 +50,55 @@ File : { [] }
 
 Line : int Stmt { ($1, $2) }
 
-Stmt : defer '(' Expr ')' Stmt { Defer (getBool $3) $5 }
-     | again '(' Expr ')' Stmt { Again (getBool $3) $5 }
+Stmt : defer '(' Expr ')' Stmt { Defer (AnyToBool $3) $5 }
+     | again '(' Expr ')' Stmt { Again (AnyToBool $3) $5 }
      | Commands { Commands $1 }
 
 Commands : Command { [$1] }
          | Command ',' Commands { $1 : $3 }
 
-Command : Expr { (getInt $1, Val 1) }
-        | Expr '#' Expr { (getInt $1, getInt $3) }
+Command : Expr { (AnyToInt $1, Val 1) }
+        | Expr '#' Expr { (AnyToInt $1, AnyToInt $3) }
 
-Expr : Expr0 { $1 }
-
-{-
-TODO. An if expression can have multiple types, how do we handle that?
-Worst case you could have an expression like:
-  print(3 + (20 ? 'a' : 4))
-where the ternary result changes whether + means add or append.
-
-Expr : Expr0 '?' Expr ':' Expr { If $1 $3 $5 }
+Expr : Expr0 '?' Expr ':' Expr { If (AnyToBool $1) $3 $5 }
      | Expr0 { $1 }
--}
 
-Expr0 : Expr0 '||' Expr1 { Bool $ Or (getBool $1) (getBool $3) }
+Expr0 : Expr0 '||' Expr1 { BoolToAny $ Or (AnyToBool $1) (AnyToBool $3) }
       | Expr1 { $1 }
 
-Expr1 : Expr1 '&&' Expr2 { Bool $ And (getBool $1) (getBool $3) }
+Expr1 : Expr1 '&&' Expr2 { BoolToAny $ And (AnyToBool $1) (AnyToBool $3) }
       | Expr2 { $1 }
 
-Expr2 : Expr2 '==' Expr3 { Bool $ EqualStr (getStr $1) (getStr $3) }
-      | Expr2 '!=' Expr3 { Bool $ Not $ EqualStr (getStr $1) (getStr $3) }
+Expr2 : Expr2 '==' Expr3 { BoolToAny $ Equal $1 $3 }
+      | Expr2 '!=' Expr3 { BoolToAny $ Not $ Equal $1 $3 }
       | Expr3 { $1 }
 
-Expr3 : Expr3 '<' Expr4 { Bool $ Less (getInt $1) (getInt $3) }
-      | Expr3 '>' Expr4 { Bool $ Greater (getInt $1) (getInt $3) }
-      | Expr3 '<=' Expr4 { Bool $ LessEqual (getInt $1) (getInt $3) }
-      | Expr3 '>=' Expr4 { Bool $ GreaterEqual (getInt $1) (getInt $3) }
+Expr3 : Expr3 '<' Expr4 { BoolToAny $ Less (AnyToInt $1) (AnyToInt $3) }
+      | Expr3 '>' Expr4 { BoolToAny $ Greater (AnyToInt $1) (AnyToInt $3) }
+      | Expr3 '<=' Expr4 { BoolToAny $ LessEqual (AnyToInt $1) (AnyToInt $3) }
+      | Expr3 '>=' Expr4 { BoolToAny $ GreaterEqual (AnyToInt $1) (AnyToInt $3) }
       | Expr4 { $1 }
 
-Expr4 : Expr4 '+' Expr5 { plus $1 $3 }
-      | Expr4 '-' Expr5 { Int $ Sub (getInt $1) (getInt $3) }
+Expr4 : Expr4 '+' Expr5 { Plus $1 $3 }
+      | Expr4 '-' Expr5 { IntToAny $ Sub (AnyToInt $1) (AnyToInt $3) }
       | Expr5 { $1 }
 
-Expr5 : Expr5 '*' Atom { Int $ Mult (getInt $1) (getInt $3) }
-      | Expr5 '/' Atom { Int $ Div (getInt $1) (getInt $3) }
-      | Expr5 '%' Atom { Int $ Rem (getInt $1) (getInt $3) }
+Expr5 : Expr5 '*' Atom { IntToAny $ Mult (AnyToInt $1) (AnyToInt $3) }
+      | Expr5 '/' Atom { IntToAny $ Div (AnyToInt $1) (AnyToInt $3) }
+      | Expr5 '%' Atom { IntToAny $ Rem (AnyToInt $1) (AnyToInt $3) }
       | Atom { $1 }
 
-Atom : int { Int $ Val $1 }
-     | str { Str $ Val $1 }
-     | bool { Bool $ Val $1 }
-     | n '(' Expr ')' { Int $ N $ getInt $3 }
-     | u '(' Expr ')' { Str $ U $ getInt $3 }
-     | print '(' Expr ')' { Int $ Print $ getStr $3 }
-     | read '(' ')' { Int Read }
-     | '!' Atom { Bool $ Not $ getBool $2 }
+Atom : int { IntToAny $ Val $1 }
+     | str { StrToAny $ Val $1 }
+     | bool { BoolToAny $ Val $1 }
+     | n '(' Expr ')' { IntToAny $ N $ AnyToInt $3 }
+     | u '(' Expr ')' { StrToAny $ U $ AnyToInt $3 }
+     | print '(' Expr ')' { IntToAny $ Print $ AnyToStr $3 }
+     | read '(' ')' { IntToAny Read }
+     | '!' Atom { BoolToAny $ Not $ AnyToBool $2 }
      | '(' Expr ')' { $2 }
 
 {
-
-data Generic
-  = Str (Expr String)
-  | Int (Expr Integer)
-  | Bool (Expr Bool)
-  deriving (Eq, Show)
-
-plus :: Generic -> Generic -> Generic
-plus (Str x) y       = Str $ Append x (getStr y)
-plus x       (Str y) = Str $ Append (getStr x) y
-plus x       y       = Int $ Add (getInt x) (getInt y)
-
-getStr :: Generic -> Expr String
-getStr (Str s) = s
-getStr (Int i) = IntToStr i
-getStr (Bool b) = BoolToStr b
-
-getInt :: Generic -> Expr Integer
-getInt (Str s) = StrToInt s
-getInt (Int i) = i
-getInt (Bool b) = BoolToInt b
-
-getBool :: Generic -> Expr Bool
-getBool (Str s) = StrToBool s
-getBool (Int i) = IntToBool i
-getBool (Bool b) = b
 
 parseError :: [S.Token] -> a
 parseError _ = error "Parse error"

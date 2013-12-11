@@ -33,10 +33,35 @@ import System.Random (getStdRandom, randomR)
 type LineNumber = Integer
 type Count = Integer
 
+data Any
+  = Str String
+  | Int Integer
+  | Bool Bool
+  deriving (Eq, Ord, Show, Read)
+
+getStr :: Any -> String
+getStr v = case v of
+  Str  s -> s
+  Int  i -> show i
+  Bool b -> if b then "true" else "false"
+
+getInt :: Any -> Integer
+getInt v = case v of
+  Str  s -> strToInt s
+  Int  i -> i
+  Bool b -> if b then 1 else 0
+
+getBool :: Any -> Whenever Bool
+getBool v = case v of
+  Str  s -> intToBool $ strToInt s
+  Int  i -> intToBool i
+  Bool b -> return b
+
 data Expr a where
   Val          :: a -> Expr a
   Append       :: Expr String -> Expr String -> Expr String
   Add          :: Expr Integer -> Expr Integer -> Expr Integer
+  Plus         :: Expr Any -> Expr Any -> Expr Any
   Sub          :: Expr Integer -> Expr Integer -> Expr Integer
   Mult         :: Expr Integer -> Expr Integer -> Expr Integer
   Div          :: Expr Integer -> Expr Integer -> Expr Integer
@@ -47,6 +72,7 @@ data Expr a where
   Greater      :: Expr Integer -> Expr Integer -> Expr Bool
   LessEqual    :: Expr Integer -> Expr Integer -> Expr Bool
   GreaterEqual :: Expr Integer -> Expr Integer -> Expr Bool
+  Equal        :: Expr Any -> Expr Any -> Expr Bool
   EqualStr     :: Expr String -> Expr String -> Expr Bool
   EqualInt     :: Expr Integer -> Expr Integer -> Expr Bool
   EqualBool    :: Expr Bool -> Expr Bool -> Expr Bool
@@ -62,6 +88,12 @@ data Expr a where
   IntToBool    :: Expr Integer -> Expr Bool
   BoolToStr    :: Expr Bool -> Expr String
   StrToBool    :: Expr String -> Expr Bool
+  AnyToStr     :: Expr Any -> Expr String
+  AnyToInt     :: Expr Any -> Expr Integer
+  AnyToBool    :: Expr Any -> Expr Bool
+  StrToAny     :: Expr String -> Expr Any
+  IntToAny     :: Expr Integer -> Expr Any
+  BoolToAny    :: Expr Bool -> Expr Any
 
 deriving instance (Eq a) => Eq (Expr a)
 deriving instance (Show a) => Show (Expr a)
@@ -76,6 +108,11 @@ type Program = [(LineNumber, Stmt)]
 type Context = Map.Map LineNumber (Count, Stmt)
 type Whenever = StateT Context IO
 
+plus :: Any -> Any -> Any
+plus (Str x) y       = Str $ x ++ getStr y
+plus x       (Str y) = Str $ getStr x ++ y
+plus x       y       = Int $ getInt x + getInt y
+
 -- | Evaluates an expression to return a value. This may have side-effects
 -- (executing a 'Language.Whenever.Base.Read' or 'Print' expression) but won't
 -- modify any line's count.
@@ -84,6 +121,7 @@ eval e = case e of
   Val          v   -> return v
   Append       x y -> liftA2 (++) (eval x) (eval y)
   Add          x y -> liftA2 (+)  (eval x) (eval y)
+  Plus         x y -> liftA2 plus (eval x) (eval y)
   Sub          x y -> liftA2 (-)  (eval x) (eval y)
   Mult         x y -> liftA2 (*)  (eval x) (eval y)
   Div          x y -> liftA2 quot (eval x) (eval y)
@@ -94,6 +132,7 @@ eval e = case e of
   Greater      x y -> liftA2 (>)  (eval x) (eval y)
   LessEqual    x y -> liftA2 (<=) (eval x) (eval y)
   GreaterEqual x y -> liftA2 (>=) (eval x) (eval y)
+  Equal        x y -> liftA2 (==) (eval x) (eval y)
   EqualStr     x y -> liftA2 (==) (eval x) (eval y)
   EqualInt     x y -> liftA2 (==) (eval x) (eval y)
   EqualBool    x y -> liftA2 (==) (eval x) (eval y)
@@ -109,6 +148,12 @@ eval e = case e of
   IntToBool    x   -> eval x >>= intToBool
   BoolToStr    x   -> (\b -> if b then "true" else "false") <$> eval x
   StrToBool    x   -> eval x >>= intToBool . strToInt
+  AnyToStr     x   -> getStr <$> eval x
+  AnyToInt     x   -> getInt <$> eval x
+  AnyToBool    x   -> eval x >>= getBool
+  StrToAny     x   -> Str <$> eval x
+  IntToAny     x   -> Int <$> eval x
+  BoolToAny    x   -> Bool <$> eval x
 
 strToInt :: String -> Integer
 strToInt s = case reads s of
