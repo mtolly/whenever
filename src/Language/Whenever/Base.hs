@@ -2,6 +2,7 @@
 module Language.Whenever.Base
 ( LineNumber
 , Count
+, Any(..)
 , Expr(..)
 , Stmt(..)
 , Program
@@ -79,7 +80,7 @@ data Expr a where
   EqualBool    :: Expr Bool -> Expr Bool -> Expr Bool
   Not          :: Expr Bool -> Expr Bool
   Read         :: Expr Integer
-  Print        :: Expr String -> Expr Integer
+  Print        :: [Expr String] -> Expr Integer
   N            :: Expr Integer -> Expr Integer
   U            :: Expr Integer -> Expr String
   If           :: Expr Bool -> Expr a -> Expr a -> Expr a
@@ -157,7 +158,7 @@ eval e = case e of
   EqualBool    x y -> liftA2 (==) (eval x) (eval y)
   Not          x   -> not <$> eval x
   Read             -> readInput
-  Print        x   -> eval x >>= lift . putStrLn >> return 0
+  Print        xs  -> mapM eval xs >>= lift . putStrLn . concat >> return 0
   N            x   -> eval x >>= count
   U            x   -> (: "") . toEnum . fromIntegral <$> eval x
   If         c t f -> eval c >>= \b -> eval $ if b then t else f
@@ -274,9 +275,11 @@ optimize expr = case expr of
     GreaterEqual a b -> Less a b
     x' -> Not x'
   Read -> Read
-  Print x -> case optimize x of
-    -- TODO: split print(x + y) into multiple prints
-    x' -> Print x'
+  Print xs -> let
+    appends x = case x of
+      Append a b -> appends a ++ appends b
+      _ -> [x]
+    in Print $ concatMap (appends . optimize) xs
   N x -> N $ optimize x
   U x -> case optimize x of
     Val a -> Val $ (: "") $ toEnum $ fromIntegral a

@@ -34,22 +34,29 @@ expr atom e = case e of
   EqualStr x y -> op "==" x y
   EqualInt x y -> op "==" x y
   EqualBool x y -> op "==" x y
+  Not (Equal x y) -> op "!=" x y
+  Not (EqualStr x y) -> op "!=" x y
+  Not (EqualInt x y) -> op "!=" x y
+  Not (EqualBool x y) -> op "!=" x y
   Not x -> '!' : expr True x
   Read -> "read()"
-  Print x -> concat ["print(", expr False x, ")"]
+  Print xs -> case xs of
+    [x] -> concat ["print(", expr False x, ")"]
+    []  -> "print(\"\")"
+    _   -> expr atom $ Print [foldr Append (Val "") xs]
   N x -> concat ["N(", expr False x, ")"]
   U x -> concat ["U(", expr False x, ")"]
   If c t f -> atomize $ unwords
     [expr True c, "?", expr True t, ":", expr True f]
-  IntToStr x -> expr atom x
-  StrToInt x -> expr atom x
-  BoolToInt x -> expr atom x
-  IntToBool x -> expr atom x
-  BoolToStr x -> expr atom x
-  StrToBool x -> expr atom x
-  AnyToStr x -> expr atom x
-  AnyToInt x -> expr atom x
-  AnyToBool x -> expr atom x
+  IntToStr x -> atomize $ expr True x ++ " + \"\""
+  StrToInt x -> atomize $ expr True x ++ " - 0"
+  BoolToInt x -> atomize $ expr True x ++ " ? 1 : 0"
+  IntToBool x -> atomize $ expr True x ++ " && true"
+  BoolToStr x -> atomize $ expr True x ++ " ? \"true\" : \"false\""
+  StrToBool x -> atomize $ expr True x ++ " ? 1 : 0"
+  AnyToStr x -> atomize $ expr True x ++ " + \"\""
+  AnyToInt x -> atomize $ expr True x ++ " - 0"
+  AnyToBool x -> atomize $ expr True x ++ " && true"
   StrToAny x -> expr atom x
   IntToAny x -> expr atom x
   BoolToAny x -> expr atom x

@@ -93,7 +93,7 @@ Atom : int { IntToAny $ Val $1 }
      | bool { BoolToAny $ Val $1 }
      | n '(' Expr ')' { IntToAny $ N $ AnyToInt $3 }
      | u '(' Expr ')' { StrToAny $ U $ AnyToInt $3 }
-     | print '(' Expr ')' { IntToAny $ Print $ AnyToStr $3 }
+     | print '(' Expr ')' { IntToAny $ Print [AnyToStr $3] }
      | read '(' ')' { IntToAny Read }
      | '!' Atom { BoolToAny $ Not $ AnyToBool $2 }
      | '(' Expr ')' { $2 }
