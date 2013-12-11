@@ -18,9 +18,6 @@ module Language.Whenever.Base
 , run
 , makeContext
 , runProgram
-, Generic(..)
-, getStr, getInt, getBool
-, plus
 ) where
 
 import Control.Applicative ((<$>), liftA2)
@@ -35,32 +32,6 @@ import System.Random (getStdRandom, randomR)
 
 type LineNumber = Integer
 type Count = Integer
-
-data Generic
-  = Str (Expr String)
-  | Int (Expr Integer)
-  | Bool (Expr Bool)
-  deriving (Eq, Show)
-
-plus :: Generic -> Generic -> Generic
-plus (Str x) y       = Str $ Append x (getStr y)
-plus x       (Str y) = Str $ Append (getStr x) y
-plus x       y       = Int $ Add (getInt x) (getInt y)
-
-getStr :: Generic -> Expr String
-getStr (Str s) = s
-getStr (Int i) = IntToStr i
-getStr (Bool b) = BoolToStr b
-
-getInt :: Generic -> Expr Integer
-getInt (Str s) = StrToInt s
-getInt (Int i) = i
-getInt (Bool b) = BoolToInt b
-
-getBool :: Generic -> Expr Bool
-getBool (Str s) = StrToBool s
-getBool (Int i) = IntToBool i
-getBool (Bool b) = b
 
 data Expr a where
   Val          :: a -> Expr a
