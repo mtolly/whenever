@@ -1,9 +1,8 @@
+{-# LANGUAGE StandaloneDeriving, GADTs #-}
 module Language.Whenever.Base
 ( LineNumber
 , Count
-, Val(..)
 , Expr(..)
-, Binop(..)
 , Stmt(..)
 , Program
 , Context
@@ -19,10 +18,13 @@ module Language.Whenever.Base
 , run
 , makeContext
 , runProgram
+, Generic(..)
+, getStr, getInt, getBool
+, plus
 ) where
 
 import Control.Applicative ((<$>), liftA2)
-import Control.Monad (forM_, unless, (>=>))
+import Control.Monad (forM_, unless)
 import Data.Char (isDigit)
 import System.IO (hLookAhead, stdin)
 
@@ -34,50 +36,70 @@ import System.Random (getStdRandom, randomR)
 type LineNumber = Integer
 type Count = Integer
 
-data Val
-  = Str String
-  | Int Integer
-  | Bool Bool
-  deriving (Eq, Ord, Show, Read)
+data Generic
+  = Str (Expr String)
+  | Int (Expr Integer)
+  | Bool (Expr Bool)
+  deriving (Eq, Show)
 
-data Expr
-  = Val Val
-  | Binop Binop Expr Expr
-  | Not Expr
-  -- ^ 'Language.Whenever.Base.Bool' negation
-  | Read
-  -- ^ Uses 'readInput' to read a natural number, or a single character
-  | Print Expr
-  -- ^ Prints a 'Str' and a newline
-  | N Expr
-  -- ^ Returns the number of copies of a line number
-  | U Expr
-  -- ^ 'Language.Whenever.Base.Int', a codepoint, to a one-character 'Str'
-  | If Expr Expr Expr
-  -- ^ Ternary conditional operator
-  deriving (Eq, Ord, Show, Read)
+plus :: Generic -> Generic -> Generic
+plus (Str x) y       = Str $ Append x (getStr y)
+plus x       (Str y) = Str $ Append (getStr x) y
+plus x       y       = Int $ Add (getInt x) (getInt y)
 
-data Binop
-  = Plus         -- ^ String concatenation or addition
-  | Sub
-  | Mult
-  | Div
-  | Rem
-  | Or           -- ^ Short-circuit boolean operator
-  | And          -- ^ Short-circuit boolean operator
-  | Less         -- ^ 'Language.Whenever.Base.Int' comparison
-  | Greater      -- ^ 'Language.Whenever.Base.Int' comparison
-  | LessEqual    -- ^ 'Language.Whenever.Base.Int' comparison
-  | GreaterEqual -- ^ 'Language.Whenever.Base.Int' comparison
-  | Equal        -- ^ True if equal after converted with 'getStr'
-  | NotEqual     -- ^ True if not equal after converted with 'getStr'
-  deriving (Eq, Ord, Show, Read, Enum, Bounded)
+getStr :: Generic -> Expr String
+getStr (Str s) = s
+getStr (Int i) = IntToStr i
+getStr (Bool b) = BoolToStr b
+
+getInt :: Generic -> Expr Integer
+getInt (Str s) = StrToInt s
+getInt (Int i) = i
+getInt (Bool b) = BoolToInt b
+
+getBool :: Generic -> Expr Bool
+getBool (Str s) = StrToBool s
+getBool (Int i) = IntToBool i
+getBool (Bool b) = b
+
+data Expr a where
+  Val          :: a -> Expr a
+  Append       :: Expr String -> Expr String -> Expr String
+  Add          :: Expr Integer -> Expr Integer -> Expr Integer
+  Sub          :: Expr Integer -> Expr Integer -> Expr Integer
+  Mult         :: Expr Integer -> Expr Integer -> Expr Integer
+  Div          :: Expr Integer -> Expr Integer -> Expr Integer
+  Rem          :: Expr Integer -> Expr Integer -> Expr Integer
+  Or           :: Expr Bool -> Expr Bool -> Expr Bool
+  And          :: Expr Bool -> Expr Bool -> Expr Bool
+  Less         :: Expr Integer -> Expr Integer -> Expr Bool
+  Greater      :: Expr Integer -> Expr Integer -> Expr Bool
+  LessEqual    :: Expr Integer -> Expr Integer -> Expr Bool
+  GreaterEqual :: Expr Integer -> Expr Integer -> Expr Bool
+  EqualStr     :: Expr String -> Expr String -> Expr Bool
+  EqualInt     :: Expr Integer -> Expr Integer -> Expr Bool
+  EqualBool    :: Expr Bool -> Expr Bool -> Expr Bool
+  Not          :: Expr Bool -> Expr Bool
+  Read         :: Expr Integer
+  Print        :: Expr String -> Expr Integer
+  N            :: Expr Integer -> Expr Integer
+  U            :: Expr Integer -> Expr String
+  If           :: Expr Bool -> Expr a -> Expr a -> Expr a
+  IntToStr     :: Expr Integer -> Expr String
+  StrToInt     :: Expr String -> Expr Integer
+  BoolToInt    :: Expr Bool -> Expr Integer
+  IntToBool    :: Expr Integer -> Expr Bool
+  BoolToStr    :: Expr Bool -> Expr String
+  StrToBool    :: Expr String -> Expr Bool
+
+deriving instance (Eq a) => Eq (Expr a)
+deriving instance (Show a) => Show (Expr a)
 
 data Stmt
-  = Defer Expr Stmt
-  | Again Expr Stmt
-  | Commands [(Expr, Expr)]
-  deriving (Eq, Ord, Show, Read)
+  = Defer (Expr Bool) Stmt
+  | Again (Expr Bool) Stmt
+  | Commands [(Expr Integer, Expr Integer)]
+  deriving (Eq, Show)
 
 type Program = [(LineNumber, Stmt)]
 type Context = Map.Map LineNumber (Count, Stmt)
@@ -86,31 +108,44 @@ type Whenever = StateT Context IO
 -- | Evaluates an expression to return a value. This may have side-effects
 -- (executing a 'Language.Whenever.Base.Read' or 'Print' expression) but won't
 -- modify any line's count.
-eval :: Expr -> Whenever Val
+eval :: Expr a -> Whenever a
 eval e = case e of
-  Val v -> return v
-  Binop op x y -> case op of
-    Plus         -> liftA2 plus (eval x) (eval y)
-    Sub          -> Int  <$> liftA2 (-)  (evalInt x) (evalInt y)
-    Mult         -> Int  <$> liftA2 (*)  (evalInt x) (evalInt y)
-    Div          -> Int  <$> liftA2 quot (evalInt x) (evalInt y)
-    Rem          -> Int  <$> liftA2 rem  (evalInt x) (evalInt y)
-    Or           -> evalBool x >>= \b ->
-      Bool <$> if b then return True else evalBool y
-    And          -> evalBool x >>= \b ->
-      Bool <$> if b then evalBool y else return False
-    Less         -> Bool <$> liftA2 (<)  (evalInt x) (evalInt y)
-    Greater      -> Bool <$> liftA2 (>)  (evalInt x) (evalInt y)
-    LessEqual    -> Bool <$> liftA2 (<=) (evalInt x) (evalInt y)
-    GreaterEqual -> Bool <$> liftA2 (>=) (evalInt x) (evalInt y)
-    Equal        -> Bool <$> liftA2 equal (eval x) (eval y)
-    NotEqual     -> Bool . not <$> liftA2 equal (eval x) (eval y)
-  Not x -> Bool . not <$> evalBool x
-  Read -> Int <$> readInput
-  Print x -> evalStr x >>= lift . putStrLn >> return (Int 0)
-  N x -> fmap Int $ evalInt x >>= count
-  U x -> Str . (:[]) . toEnum . fromIntegral <$> evalInt x
-  If c t f -> evalBool c >>= \b -> eval $ if b then t else f
+  Val          v   -> return v
+  Append       x y -> liftA2 (++) (eval x) (eval y)
+  Add          x y -> liftA2 (+)  (eval x) (eval y)
+  Sub          x y -> liftA2 (-)  (eval x) (eval y)
+  Mult         x y -> liftA2 (*)  (eval x) (eval y)
+  Div          x y -> liftA2 quot (eval x) (eval y)
+  Rem          x y -> liftA2 rem  (eval x) (eval y)
+  Or           x y -> liftA2 (||) (eval x) (eval y)
+  And          x y -> liftA2 (&&) (eval x) (eval y)
+  Less         x y -> liftA2 (<)  (eval x) (eval y)
+  Greater      x y -> liftA2 (>)  (eval x) (eval y)
+  LessEqual    x y -> liftA2 (<=) (eval x) (eval y)
+  GreaterEqual x y -> liftA2 (>=) (eval x) (eval y)
+  EqualStr     x y -> liftA2 (==) (eval x) (eval y)
+  EqualInt     x y -> liftA2 (==) (eval x) (eval y)
+  EqualBool    x y -> liftA2 (==) (eval x) (eval y)
+  Not          x   -> not <$> eval x
+  Read             -> readInput
+  Print        x   -> eval x >>= lift . putStrLn >> return 0
+  N            x   -> eval x >>= count
+  U            x   -> (: "") . toEnum . fromIntegral <$> eval x
+  If         c t f -> eval c >>= \b -> eval $ if b then t else f
+  IntToStr     x   -> show <$> eval x
+  StrToInt     x   -> strToInt <$> eval x
+  BoolToInt    x   -> fromIntegral . fromEnum <$> eval x
+  IntToBool    x   -> eval x >>= intToBool
+  BoolToStr    x   -> (\b -> if b then "true" else "false") <$> eval x
+  StrToBool    x   -> eval x >>= intToBool . strToInt
+
+strToInt :: String -> Integer
+strToInt s = case reads s of
+  [(i, _)] -> i
+  _        -> 0
+
+intToBool :: Integer -> Whenever Bool
+intToBool i = (/= 0) <$> count i
 
 -- | From standard input, reads either a natural number (sequence of digits),
 -- or a single char (returning its codepoint) if it isn't a digit.
@@ -122,44 +157,6 @@ readInput = lift $ hLookAhead stdin >>= \c -> if isDigit c
       else return ""
     in read <$> readWhile isDigit
   else fromIntegral . fromEnum <$> getChar
-
--- | String concatenation (if either arg is a 'Str') or addition.
-plus :: Val -> Val -> Val
-plus (Str x) y       = Str $ x ++ getStr y
-plus x       (Str y) = Str $ getStr x ++ y
-plus x       y       = Int $ getInt x + getInt y
-
--- | True if two values are equal when converted with 'getStr'.
-equal :: Val -> Val -> Bool
-equal x y = getStr x == getStr y
-
-getStr :: Val -> String
-getStr (Str  s) = s
-getStr (Int  i) = show i
-getStr (Bool b) = if b then "true" else "false"
-
--- | A string is converted to the integer it starts with, or 0 if there is none.
-getInt :: Val -> Integer
-getInt (Str  s) = case reads s of
-  [(i, _)] -> i
-  _        -> 0
-getInt (Int  i) = i
-getInt (Bool b) = if b then 1 else 0
-
--- | An 'Language.Whenever.Base.Int' or 'Str' is converted by first applying
--- 'getInt', and then checking if there are any copies of that numbered line.
-getBool :: Val -> Whenever Bool
-getBool (Bool b) = return b
-getBool v = (/= 0) <$> count (getInt v)
-
-evalStr :: Expr -> Whenever String
-evalStr = fmap getStr . eval
-
-evalInt :: Expr -> Whenever Integer
-evalInt = fmap getInt . eval
-
-evalBool :: Expr -> Whenever Bool
-evalBool = eval >=> getBool
 
 -- | Returns the number of copies of a line.
 count :: LineNumber -> Whenever Count
@@ -187,19 +184,19 @@ getStmt n = maybe err snd <$> gets (Map.lookup n)
 -- it is not removed.
 runLine :: LineNumber -> Whenever ()
 runLine n = getStmt n >>= go where
-  go (Defer x s) = evalBool x >>= \b -> unless b $ go s
-  go (Again x s) = evalBool x >>= \b -> if b then runStmt s else go s
+  go (Defer x s) = eval x >>= \b -> unless b $ go s
+  go (Again x s) = eval x >>= \b -> if b then runStmt s else go s
   go (Commands ls) = runStmt (Commands ls) >> addLine n (-1)
 
 -- | Executes a statement, without removing its line. A 'Defer' clause means the
 -- statement isn't executed. An 'Again' clause is executed for its side-effects,
 -- but does nothing, because the line won't be removed to begin with.
 runStmt :: Stmt -> Whenever ()
-runStmt (Defer x s) = evalBool x >>= \b -> unless b $ runStmt s
-runStmt (Again x s) = evalBool x >> runStmt s
+runStmt (Defer x s) = eval x >>= \b -> unless b $ runStmt s
+runStmt (Again x s) = eval x >> runStmt s
 runStmt (Commands ls) = forM_ ls $ \(x, y) -> do
-  n <- evalInt x
-  c <- evalInt y
+  n <- eval x
+  c <- eval y
   case compare n 0 of
     LT -> addLine (abs n) (negate c)
     EQ -> return ()

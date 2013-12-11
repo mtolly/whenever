@@ -50,52 +50,61 @@ File : { [] }
 
 Line : int Stmt { ($1, $2) }
 
-Stmt : defer '(' Expr ')' Stmt { Defer $3 $5 }
-     | again '(' Expr ')' Stmt { Again $3 $5 }
+Stmt : defer '(' Expr ')' Stmt { Defer (getBool $3) $5 }
+     | again '(' Expr ')' Stmt { Again (getBool $3) $5 }
      | Commands { Commands $1 }
 
 Commands : Command { [$1] }
          | Command ',' Commands { $1 : $3 }
 
-Command : Expr { ($1, Val $ Int 1) }
-        | Expr '#' Expr { ($1, $3) }
+Command : Expr { (getInt $1, Val 1) }
+        | Expr '#' Expr { (getInt $1, getInt $3) }
+
+Expr : Expr0 { $1 }
+
+{-
+TODO. An if expression can have multiple types, how do we handle that?
+Worst case you could have an expression like:
+  print(3 + (20 ? 'a' : 4))
+where the ternary result changes whether + means add or append.
 
 Expr : Expr0 '?' Expr ':' Expr { If $1 $3 $5 }
      | Expr0 { $1 }
+-}
 
-Expr0 : Expr0 '||' Expr1 { Binop Or $1 $3 }
+Expr0 : Expr0 '||' Expr1 { Bool $ Or (getBool $1) (getBool $3) }
       | Expr1 { $1 }
 
-Expr1 : Expr1 '&&' Expr2 { Binop And $1 $3 }
+Expr1 : Expr1 '&&' Expr2 { Bool $ And (getBool $1) (getBool $3) }
       | Expr2 { $1 }
 
-Expr2 : Expr2 '==' Expr3 { Binop Equal $1 $3 }
-      | Expr2 '!=' Expr3 { Binop NotEqual $1 $3 }
-      | Expr3{ $1 }
+Expr2 : Expr2 '==' Expr3 { Bool $ EqualStr (getStr $1) (getStr $3) }
+      | Expr2 '!=' Expr3 { Bool $ Not $ EqualStr (getStr $1) (getStr $3) }
+      | Expr3 { $1 }
 
-Expr3 : Expr3 '<' Expr4 { Binop Less $1 $3 }
-      | Expr3 '>' Expr4 { Binop Greater $1 $3 }
-      | Expr3 '<=' Expr4 { Binop LessEqual $1 $3 }
-      | Expr3 '>=' Expr4 { Binop GreaterEqual $1 $3 }
+Expr3 : Expr3 '<' Expr4 { Bool $ Less (getInt $1) (getInt $3) }
+      | Expr3 '>' Expr4 { Bool $ Greater (getInt $1) (getInt $3) }
+      | Expr3 '<=' Expr4 { Bool $ LessEqual (getInt $1) (getInt $3) }
+      | Expr3 '>=' Expr4 { Bool $ GreaterEqual (getInt $1) (getInt $3) }
       | Expr4 { $1 }
 
-Expr4 : Expr4 '+' Expr5 { Binop Plus $1 $3 }
-      | Expr4 '-' Expr5 { Binop Sub $1 $3 }
+Expr4 : Expr4 '+' Expr5 { plus $1 $3 }
+      | Expr4 '-' Expr5 { Int $ Sub (getInt $1) (getInt $3) }
       | Expr5 { $1 }
 
-Expr5 : Expr5 '*' Atom { Binop Mult $1 $3 }
-      | Expr5 '/' Atom { Binop Div $1 $3 }
-      | Expr5 '%' Atom { Binop Rem $1 $3 }
+Expr5 : Expr5 '*' Atom { Int $ Mult (getInt $1) (getInt $3) }
+      | Expr5 '/' Atom { Int $ Div (getInt $1) (getInt $3) }
+      | Expr5 '%' Atom { Int $ Rem (getInt $1) (getInt $3) }
       | Atom { $1 }
 
-Atom : int { Val (Int $1) }
-     | str { Val (Str $1) }
-     | bool { Val (Bool $1) }
-     | n '(' Expr ')' { N $3 }
-     | u '(' Expr ')' { U $3 }
-     | print '(' Expr ')' { Print $3 }
-     | read '(' ')' { Read }
-     | '!' Atom { Not $2 }
+Atom : int { Int $ Val $1 }
+     | str { Str $ Val $1 }
+     | bool { Bool $ Val $1 }
+     | n '(' Expr ')' { Int $ N $ getInt $3 }
+     | u '(' Expr ')' { Str $ U $ getInt $3 }
+     | print '(' Expr ')' { Int $ Print $ getStr $3 }
+     | read '(' ')' { Int Read }
+     | '!' Atom { Bool $ Not $ getBool $2 }
      | '(' Expr ')' { $2 }
 
 {
