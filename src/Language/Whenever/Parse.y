@@ -50,15 +50,15 @@ File : { [] }
 
 Line : int Stmt { ($1, $2) }
 
-Stmt : defer '(' Expr ')' Stmt { Defer (AnyToBool $3) $5 }
-     | again '(' Expr ')' Stmt { Again (AnyToBool $3) $5 }
+Stmt : defer '(' Expr ')' Stmt { Defer (optimize $ AnyToBool $3) $5 }
+     | again '(' Expr ')' Stmt { Again (optimize $ AnyToBool $3) $5 }
      | Commands { Commands $1 }
 
 Commands : Command { [$1] }
          | Command ',' Commands { $1 : $3 }
 
-Command : Expr { (AnyToInt $1, Val 1) }
-        | Expr '#' Expr { (AnyToInt $1, AnyToInt $3) }
+Command : Expr { (optimize $ AnyToInt $1, Val 1) }
+        | Expr '#' Expr { (optimize $ AnyToInt $1, optimize $ AnyToInt $3) }
 
 Expr : Expr0 '?' Expr ':' Expr { If (AnyToBool $1) $3 $5 }
      | Expr0 { $1 }

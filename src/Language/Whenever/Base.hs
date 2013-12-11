@@ -18,6 +18,7 @@ module Language.Whenever.Base
 , run
 , makeContext
 , runProgram
+, optimize
 ) where
 
 import Control.Applicative ((<$>), liftA2)
@@ -113,6 +114,24 @@ plus (Str x) y       = Str $ x ++ getStr y
 plus x       (Str y) = Str $ getStr x ++ y
 plus x       y       = Int $ getInt x + getInt y
 
+unwrapStr :: Expr Any -> Maybe (Expr String)
+unwrapStr (Val (Str s)) = Just (Val s)
+unwrapStr (StrToAny e) = Just e
+unwrapStr (If b t f) = liftA2 (If b) (unwrapStr t) (unwrapStr f)
+unwrapStr _ = Nothing
+
+unwrapInt :: Expr Any -> Maybe (Expr Integer)
+unwrapInt (Val (Int i)) = Just (Val i)
+unwrapInt (IntToAny e) = Just e
+unwrapInt (If b t f) = liftA2 (If b) (unwrapInt t) (unwrapInt f)
+unwrapInt _ = Nothing
+
+unwrapBool :: Expr Any -> Maybe (Expr Bool)
+unwrapBool (Val (Bool b)) = Just (Val b)
+unwrapBool (BoolToAny e) = Just e
+unwrapBool (If b t f) = liftA2 (If b) (unwrapBool t) (unwrapBool f)
+unwrapBool _ = Nothing
+
 -- | Evaluates an expression to return a value. This may have side-effects
 -- (executing a 'Language.Whenever.Base.Read' or 'Print' expression) but won't
 -- modify any line's count.
@@ -154,6 +173,156 @@ eval e = case e of
   StrToAny     x   -> Str <$> eval x
   IntToAny     x   -> Int <$> eval x
   BoolToAny    x   -> Bool <$> eval x
+
+optimize :: Expr a -> Expr a
+optimize expr = case expr of
+  Val _ -> expr
+  Append x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a ++ b
+    (Val "", y') -> y'
+    (x', Val "") -> x'
+    (x', y') -> Append x' y'
+  Add x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a + b
+    (Val 0, y') -> y'
+    (x', Val 0) -> x'
+    (x', y') -> Add x' y'
+  Plus x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ plus a b
+    (StrToAny x', y') -> StrToAny $ optimize $ Append x' (AnyToStr y')
+    (x', StrToAny y') -> StrToAny $ optimize $ Append (AnyToStr x') y'
+    (IntToAny x', IntToAny y') -> IntToAny $ optimize $ Add x' y'
+    (IntToAny x', BoolToAny y') -> IntToAny $ optimize $ Add x' (BoolToInt y')
+    (BoolToAny x', IntToAny y') -> IntToAny $ optimize $ Add (BoolToInt x') y'
+    (BoolToAny x', BoolToAny y') -> IntToAny $ optimize $
+      Add (BoolToInt x') (BoolToInt y')
+    (x', y') -> Plus x' y'
+  Sub x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a - b
+    (x', Val 0) -> x'
+    (x', y') -> Sub x' y'
+  Mult x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a * b
+    (Val 1, y') -> y'
+    (x', Val 1) -> x'
+    (x', y') -> Mult x' y'
+  Div x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ quot a b
+    (x', Val 1) -> x'
+    (x', y') -> Div x' y'
+  Rem x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ rem a b
+    (_, Val 1) -> Val 0
+    (x', y') -> Rem x' y'
+  Or x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a || b
+    (Val True, _) -> Val True
+    (_, Val True) -> Val True
+    (Val False, y') -> y'
+    (x', Val False) -> x'
+    (x', y') -> Or x' y'
+  And x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a && b
+    (Val False, _) -> Val False
+    (_, Val False) -> Val False
+    (Val True, y') -> y'
+    (x', Val True) -> x'
+    (x', y') -> And x' y'
+  Less x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a < b
+    (x', y') -> Less x' y'
+  Greater x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a > b
+    (x', y') -> Greater x' y'
+  LessEqual x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a <= b
+    (x', y') -> LessEqual x' y'
+  GreaterEqual x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a >= b
+    (x', y') -> GreaterEqual x' y'
+  Equal x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a == b
+    (StrToAny x', y') -> optimize $ EqualStr x' (AnyToStr y')
+    (x', StrToAny y') -> optimize $ EqualStr (AnyToStr x') y'
+    (IntToAny x', IntToAny y') -> optimize $ EqualInt x' y'
+    (IntToAny x', BoolToAny y') -> optimize $ EqualInt x' (BoolToInt y')
+    (BoolToAny x', IntToAny y') -> optimize $ EqualInt (BoolToInt x') y'
+    (BoolToAny x', BoolToAny y') -> optimize $ EqualBool x' y'
+    (x', y') -> if x' == y'
+      then Val True
+      else Equal x' y'
+  EqualStr x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a == b
+    (x', y') -> if x' == y'
+      then Val True
+      else EqualStr x' y'
+  EqualInt x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a == b
+    (x', y') -> if x' == y'
+      then Val True
+      else EqualInt x' y'
+  EqualBool x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ a == b
+    (x', y') -> if x' == y'
+      then Val True
+      else EqualBool x' y'
+  Not x -> case optimize x of
+    Val a -> Val $ not a
+    Less a b -> GreaterEqual a b
+    Greater a b -> LessEqual a b
+    LessEqual a b -> Greater a b
+    GreaterEqual a b -> Less a b
+    x' -> Not x'
+  Read -> Read
+  Print x -> case optimize x of
+    -- TODO: split print(x + y) into multiple prints
+    x' -> Print x'
+  N x -> N $ optimize x
+  U x -> case optimize x of
+    Val a -> Val $ (: "") $ toEnum $ fromIntegral a
+    x' -> U x'
+  If b t f -> case (optimize b, optimize t, optimize f) of
+    (Val True, t', _) -> t'
+    (Val False, _, f') -> f'
+    (b', t', f') -> If b' t' f'
+  IntToStr x -> case optimize x of
+    Val i -> Val $ show i
+    x' -> IntToStr x'
+  StrToInt x -> case optimize x of
+    Val s -> Val $ strToInt s
+    IntToStr y -> y
+    x' -> StrToInt x'
+  BoolToInt x -> case optimize x of
+    Val b -> Val $ if b then 1 else 0
+    x' -> BoolToInt x'
+  IntToBool x -> IntToBool $ optimize x
+  BoolToStr x -> case optimize x of
+    Val b -> Val $ if b then "true" else "false"
+    x' -> BoolToStr x'
+  StrToBool x -> case optimize x of
+    Val s -> IntToBool $ Val $ strToInt s
+    x' -> StrToBool x'
+  AnyToStr x -> case optimize x of
+    x' -> case (unwrapStr x', unwrapInt x', unwrapBool x') of
+      (Just s, _, _) -> s
+      (_, Just i, _) -> optimize $ IntToStr i
+      (_, _, Just b) -> optimize $ BoolToStr b
+      (Nothing, Nothing, Nothing) -> AnyToStr x'
+  AnyToInt x -> case optimize x of
+    x' -> case (unwrapStr x', unwrapInt x', unwrapBool x') of
+      (Just s, _, _) -> optimize $ StrToInt s
+      (_, Just i, _) -> i
+      (_, _, Just b) -> optimize $ BoolToInt b
+      (Nothing, Nothing, Nothing) -> AnyToInt x'
+  AnyToBool x -> case optimize x of
+    x' -> case (unwrapStr x', unwrapInt x', unwrapBool x') of
+      (Just s, _, _) -> optimize $ StrToBool s
+      (_, Just i, _) -> optimize $ IntToBool i
+      (_, _, Just b) -> b
+      (Nothing, Nothing, Nothing) -> AnyToBool x'
+  StrToAny x -> StrToAny $ optimize x
+  IntToAny x -> IntToAny $ optimize x
+  BoolToAny x -> BoolToAny $ optimize x
 
 strToInt :: String -> Integer
 strToInt s = case reads s of
