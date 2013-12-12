@@ -1,22 +1,45 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs, OverloadedStrings #-}
 module Language.Whenever.Unparse
 ( expr
 , stmt
 , line
 , program
+, Value
+, showProgram
 ) where
 
-import Data.Char (toLower)
-import Data.List (intercalate)
+import Data.List (intersperse)
+import Data.Monoid ((<>), mconcat)
+
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Builder as B
 
 import Language.Whenever.Base
+
+class Value a where
+  toBuilder :: a -> B.Builder
+
+instance Value T.Text where
+  toBuilder = B.fromString . show
+
+instance Value Integer where
+  toBuilder = B.fromString . show
+
+instance Value Bool where
+  toBuilder b = B.fromText $ if b then "true" else "false"
+
+instance Value Any where
+  toBuilder (Str s) = toBuilder s
+  toBuilder (Int i) = toBuilder i
+  toBuilder (Bool b) = toBuilder b
 
 -- | Generates the code for an expression. If the `Bool` is `True`, a binary or
 -- ternary operator will have parentheses around it. Subexpressions always have
 -- enough parentheses so that operator precedence is unambiguous.
-expr :: (Show a) => Bool -> Expr a -> String
+expr :: (Value a) => Bool -> Expr a -> B.Builder
 expr atom e = case e of
-  Val v -> map toLower $ show v
+  Val v -> toBuilder v
   Append x y -> op "+" x y
   Add x y -> op "+" x y
   Plus x y -> op "+" x y
@@ -38,47 +61,50 @@ expr atom e = case e of
   Not (EqualStr x y) -> op "!=" x y
   Not (EqualInt x y) -> op "!=" x y
   Not (EqualBool x y) -> op "!=" x y
-  Not x -> '!' : expr True x
+  Not x -> "!" <> expr True x
   Read -> "read()"
   Print xs -> case xs of
-    [x] -> concat ["print(", expr False x, ")"]
+    [x] -> mconcat ["print(", expr False x, ")"]
     []  -> "print(\"\")"
     _   -> expr atom $ Print [foldr Append (Val "") xs]
-  N x -> concat ["N(", expr False x, ")"]
-  U x -> concat ["U(", expr False x, ")"]
-  If c t f -> atomize $ unwords
-    [expr True c, "?", expr True t, ":", expr True f]
-  IntToStr x -> atomize $ expr True x ++ " + \"\""
-  StrToInt x -> atomize $ expr True x ++ " - 0"
-  BoolToInt x -> atomize $ expr True x ++ " ? 1 : 0"
-  IntToBool x -> atomize $ expr True x ++ " && true"
-  BoolToStr x -> atomize $ expr True x ++ " ? \"true\" : \"false\""
-  StrToBool x -> atomize $ expr True x ++ " ? 1 : 0"
-  AnyToStr x -> atomize $ expr True x ++ " + \"\""
-  AnyToInt x -> atomize $ expr True x ++ " - 0"
-  AnyToBool x -> atomize $ expr True x ++ " && true"
+  N x -> mconcat ["N(", expr False x, ")"]
+  U x -> mconcat ["U(", expr False x, ")"]
+  If c t f -> atomize $ mconcat
+    [expr True c, " ? ", expr True t, " : ", expr True f]
+  IntToStr x -> atomize $ expr True x <> " + \"\""
+  StrToInt x -> atomize $ expr True x <> " - 0"
+  BoolToInt x -> atomize $ expr True x <> " ? 1 : 0"
+  IntToBool x -> atomize $ expr True x <> " && true"
+  BoolToStr x -> atomize $ expr True x <> " ? \"true\" : \"false\""
+  StrToBool x -> atomize $ expr True x <> " ? 1 : 0"
+  AnyToStr x -> atomize $ expr True x <> " + \"\""
+  AnyToInt x -> atomize $ expr True x <> " - 0"
+  AnyToBool x -> atomize $ expr True x <> " && true"
   StrToAny x -> expr atom x
   IntToAny x -> expr atom x
   BoolToAny x -> expr atom x
-  where atomize s = if atom then "(" ++ s ++ ")" else s
-        op :: (Show a, Show b) => String -> Expr a -> Expr b -> String
-        op o x y = atomize $ unwords [expr True x, o, expr True y]
+  where atomize s = if atom then "(" <> s <> ")" else s
+        op :: (Value a, Value b) => B.Builder -> Expr a -> Expr b -> B.Builder
+        op o x y = atomize $ mconcat [expr True x, " ", o, " ", expr True y]
 
 -- | Generates the code for a statement.
-stmt :: Stmt -> String
+stmt :: Stmt -> B.Builder
 stmt s = case s of
-  Defer x s' -> concat ["defer (", expr False x, ") ", stmt s']
-  Again x s' -> concat ["again (", expr False x, ") ", stmt s']
-  Commands cs -> intercalate ", "
+  Defer x s' -> mconcat ["defer (", expr False x, ") ", stmt s']
+  Again x s' -> mconcat ["again (", expr False x, ") ", stmt s']
+  Commands cs -> mconcat $ intersperse ", "
     [ case y of
         Val 1 -> expr True x
-        _     -> expr True x ++ "#" ++ expr True y
+        _     -> expr True x <> "#" <> expr True y
     | (x, y) <- cs ] 
 
 -- | Generates the code for a line with a number and a statement.
-line :: LineNumber -> Stmt -> String
-line n s = concat [show n, " ", stmt s, ";"]
+line :: LineNumber -> Stmt -> B.Builder
+line n s = mconcat [toBuilder n, " ", stmt s, ";"]
 
 -- | Generates the code for a complete program.
-program :: Program -> String
-program = unlines . map (uncurry line)
+program :: Program -> B.Builder
+program = mconcat . intersperse "\n" . map (uncurry line)
+
+showProgram :: Program -> TL.Text
+showProgram = B.toLazyText . program

@@ -1,4 +1,4 @@
-{-# LANGUAGE StandaloneDeriving, GADTs #-}
+{-# LANGUAGE StandaloneDeriving, GADTs, OverloadedStrings #-}
 module Language.Whenever.Base
 ( LineNumber
 , Count
@@ -25,26 +25,29 @@ module Language.Whenever.Base
 import Control.Applicative ((<$>), liftA2)
 import Control.Monad (forM_, unless)
 import Data.Char (isDigit)
+import Data.Monoid ((<>))
 import System.IO (hLookAhead, stdin)
 
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT, evalStateT, gets, modify)
 import qualified Data.Map as Map
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import System.Random (getStdRandom, randomR)
 
 type LineNumber = Integer
 type Count = Integer
 
 data Any
-  = Str String
+  = Str T.Text
   | Int Integer
   | Bool Bool
   deriving (Eq, Ord, Show, Read)
 
-getStr :: Any -> String
+getStr :: Any -> T.Text
 getStr v = case v of
   Str  s -> s
-  Int  i -> show i
+  Int  i -> T.pack $ show i
   Bool b -> if b then "true" else "false"
 
 getInt :: Any -> Integer
@@ -61,7 +64,7 @@ getBool v = case v of
 
 data Expr a where
   Val          :: a -> Expr a
-  Append       :: Expr String -> Expr String -> Expr String
+  Append       :: Expr T.Text -> Expr T.Text -> Expr T.Text
   Add          :: Expr Integer -> Expr Integer -> Expr Integer
   Plus         :: Expr Any -> Expr Any -> Expr Any
   Sub          :: Expr Integer -> Expr Integer -> Expr Integer
@@ -75,25 +78,25 @@ data Expr a where
   LessEqual    :: Expr Integer -> Expr Integer -> Expr Bool
   GreaterEqual :: Expr Integer -> Expr Integer -> Expr Bool
   Equal        :: Expr Any -> Expr Any -> Expr Bool
-  EqualStr     :: Expr String -> Expr String -> Expr Bool
+  EqualStr     :: Expr T.Text -> Expr T.Text -> Expr Bool
   EqualInt     :: Expr Integer -> Expr Integer -> Expr Bool
   EqualBool    :: Expr Bool -> Expr Bool -> Expr Bool
   Not          :: Expr Bool -> Expr Bool
   Read         :: Expr Integer
-  Print        :: [Expr String] -> Expr Integer
+  Print        :: [Expr T.Text] -> Expr Integer
   N            :: Expr Integer -> Expr Integer
-  U            :: Expr Integer -> Expr String
+  U            :: Expr Integer -> Expr T.Text
   If           :: Expr Bool -> Expr a -> Expr a -> Expr a
-  IntToStr     :: Expr Integer -> Expr String
-  StrToInt     :: Expr String -> Expr Integer
+  IntToStr     :: Expr Integer -> Expr T.Text
+  StrToInt     :: Expr T.Text -> Expr Integer
   BoolToInt    :: Expr Bool -> Expr Integer
   IntToBool    :: Expr Integer -> Expr Bool
-  BoolToStr    :: Expr Bool -> Expr String
-  StrToBool    :: Expr String -> Expr Bool
-  AnyToStr     :: Expr Any -> Expr String
+  BoolToStr    :: Expr Bool -> Expr T.Text
+  StrToBool    :: Expr T.Text -> Expr Bool
+  AnyToStr     :: Expr Any -> Expr T.Text
   AnyToInt     :: Expr Any -> Expr Integer
   AnyToBool    :: Expr Any -> Expr Bool
-  StrToAny     :: Expr String -> Expr Any
+  StrToAny     :: Expr T.Text -> Expr Any
   IntToAny     :: Expr Integer -> Expr Any
   BoolToAny    :: Expr Bool -> Expr Any
 
@@ -111,11 +114,11 @@ type Context = Map.Map LineNumber (Count, Stmt)
 type Whenever = StateT Context IO
 
 plus :: Any -> Any -> Any
-plus (Str x) y       = Str $ x ++ getStr y
-plus x       (Str y) = Str $ getStr x ++ y
+plus (Str x) y       = Str $ x <> getStr y
+plus x       (Str y) = Str $ getStr x <> y
 plus x       y       = Int $ getInt x + getInt y
 
-unwrapStr :: Expr Any -> Maybe (Expr String)
+unwrapStr :: Expr Any -> Maybe (Expr T.Text)
 unwrapStr (Val (Str s)) = Just (Val s)
 unwrapStr (StrToAny e) = Just e
 unwrapStr (If b t f) = liftA2 (If b) (unwrapStr t) (unwrapStr f)
@@ -139,7 +142,7 @@ unwrapBool _ = Nothing
 eval :: Expr a -> Whenever a
 eval e = case e of
   Val          v   -> return v
-  Append       x y -> liftA2 (++) (eval x) (eval y)
+  Append       x y -> liftA2 (<>) (eval x) (eval y)
   Add          x y -> liftA2 (+)  (eval x) (eval y)
   Plus         x y -> liftA2 plus (eval x) (eval y)
   Sub          x y -> liftA2 (-)  (eval x) (eval y)
@@ -158,11 +161,11 @@ eval e = case e of
   EqualBool    x y -> liftA2 (==) (eval x) (eval y)
   Not          x   -> not <$> eval x
   Read             -> readInput
-  Print        xs  -> mapM eval xs >>= lift . putStrLn . concat >> return 0
+  Print        xs  -> mapM eval xs >>= lift . TIO.putStrLn . T.concat >> return 0
   N            x   -> eval x >>= count
-  U            x   -> (: "") . toEnum . fromIntegral <$> eval x
+  U            x   -> T.singleton . toEnum . fromIntegral <$> eval x
   If         c t f -> eval c >>= \b -> eval $ if b then t else f
-  IntToStr     x   -> show <$> eval x
+  IntToStr     x   -> T.pack . show <$> eval x
   StrToInt     x   -> strToInt <$> eval x
   BoolToInt    x   -> fromIntegral . fromEnum <$> eval x
   IntToBool    x   -> eval x >>= intToBool
@@ -179,7 +182,7 @@ optimize :: Expr a -> Expr a
 optimize expr = case expr of
   Val _ -> expr
   Append x y -> case (optimize x, optimize y) of
-    (Val a, Val b) -> Val $ a ++ b
+    (Val a, Val b) -> Val $ a <> b
     (Val "", y') -> y'
     (x', Val "") -> x'
     (x', y') -> Append x' y'
@@ -282,14 +285,14 @@ optimize expr = case expr of
     in Print $ concatMap (appends . optimize) xs
   N x -> N $ optimize x
   U x -> case optimize x of
-    Val a -> Val $ (: "") $ toEnum $ fromIntegral a
+    Val a -> Val $ T.singleton $ toEnum $ fromIntegral a
     x' -> U x'
   If b t f -> case (optimize b, optimize t, optimize f) of
     (Val True, t', _) -> t'
     (Val False, _, f') -> f'
     (b', t', f') -> If b' t' f'
   IntToStr x -> case optimize x of
-    Val i -> Val $ show i
+    Val i -> Val $ T.pack $ show i
     x' -> IntToStr x'
   StrToInt x -> case optimize x of
     Val s -> Val $ strToInt s
@@ -327,8 +330,8 @@ optimize expr = case expr of
   IntToAny x -> IntToAny $ optimize x
   BoolToAny x -> BoolToAny $ optimize x
 
-strToInt :: String -> Integer
-strToInt s = case reads s of
+strToInt :: T.Text -> Integer
+strToInt s = case reads $ T.unpack s of
   [(i, _)] -> i
   _        -> 0
 

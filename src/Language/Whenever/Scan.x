@@ -1,6 +1,8 @@
 {
 {-# OPTIONS_GHC -w #-}
 module Language.Whenever.Scan (scan, Token(..)) where
+
+import qualified Data.Text as T
 }
 
 %wrapper "basic"
@@ -49,7 +51,7 @@ false { const (Bool False) }
 
 data Token
   = Int Integer
-  | Str String
+  | Str T.Text
   | Bool Bool
   | Defer
   | Again
