@@ -73,13 +73,9 @@ data Expr a where
   Rem          :: Expr Integer -> Expr Integer -> Expr Integer
   Or           :: Expr Bool -> Expr Bool -> Expr Bool
   And          :: Expr Bool -> Expr Bool -> Expr Bool
-  Less         :: Expr Integer -> Expr Integer -> Expr Bool
-  Greater      :: Expr Integer -> Expr Integer -> Expr Bool
-  LessEqual    :: Expr Integer -> Expr Integer -> Expr Bool
-  GreaterEqual :: Expr Integer -> Expr Integer -> Expr Bool
+  Compare      :: Ordering -> Expr Integer -> Expr Integer -> Expr Bool
   Equal        :: Expr Any -> Expr Any -> Expr Bool
   EqualStr     :: Expr T.Text -> Expr T.Text -> Expr Bool
-  EqualInt     :: Expr Integer -> Expr Integer -> Expr Bool
   EqualBool    :: Expr Bool -> Expr Bool -> Expr Bool
   Not          :: Expr Bool -> Expr Bool
   Read         :: Expr Integer
@@ -151,13 +147,9 @@ eval e = case e of
   Rem          x y -> liftA2 rem  (eval x) (eval y)
   Or           x y -> liftA2 (||) (eval x) (eval y)
   And          x y -> liftA2 (&&) (eval x) (eval y)
-  Less         x y -> liftA2 (<)  (eval x) (eval y)
-  Greater      x y -> liftA2 (>)  (eval x) (eval y)
-  LessEqual    x y -> liftA2 (<=) (eval x) (eval y)
-  GreaterEqual x y -> liftA2 (>=) (eval x) (eval y)
+  Compare    o x y -> liftA2 (\a b -> compare a b == o) (eval x) (eval y)
   Equal        x y -> liftA2 (==) (eval x) (eval y)
   EqualStr     x y -> liftA2 (==) (eval x) (eval y)
-  EqualInt     x y -> liftA2 (==) (eval x) (eval y)
   EqualBool    x y -> liftA2 (==) (eval x) (eval y)
   Not          x   -> not <$> eval x
   Read             -> readInput
@@ -232,25 +224,18 @@ optimize expr = case expr of
     (Val True, y') -> y'
     (x', Val True) -> x'
     (x', y') -> And x' y'
-  Less x y -> case (optimize x, optimize y) of
-    (Val a, Val b) -> Val $ a < b
-    (x', y') -> Less x' y'
-  Greater x y -> case (optimize x, optimize y) of
-    (Val a, Val b) -> Val $ a > b
-    (x', y') -> Greater x' y'
-  LessEqual x y -> case (optimize x, optimize y) of
-    (Val a, Val b) -> Val $ a <= b
-    (x', y') -> LessEqual x' y'
-  GreaterEqual x y -> case (optimize x, optimize y) of
-    (Val a, Val b) -> Val $ a >= b
-    (x', y') -> GreaterEqual x' y'
+  Compare o x y -> case (optimize x, optimize y) of
+    (Val a, Val b) -> Val $ compare a b == o
+    (x', y') -> if o == EQ && x' == y'
+      then Val True
+      else Compare o x' y'
   Equal x y -> case (optimize x, optimize y) of
     (Val a, Val b) -> Val $ a == b
     (StrToAny x', y') -> optimize $ EqualStr x' (AnyToStr y')
     (x', StrToAny y') -> optimize $ EqualStr (AnyToStr x') y'
-    (IntToAny x', IntToAny y') -> optimize $ EqualInt x' y'
-    (IntToAny x', BoolToAny y') -> optimize $ EqualInt x' (BoolToInt y')
-    (BoolToAny x', IntToAny y') -> optimize $ EqualInt (BoolToInt x') y'
+    (IntToAny x', IntToAny y') -> optimize $ Compare EQ x' y'
+    (IntToAny x', BoolToAny y') -> optimize $ Compare EQ x' (BoolToInt y')
+    (BoolToAny x', IntToAny y') -> optimize $ Compare EQ (BoolToInt x') y'
     (BoolToAny x', BoolToAny y') -> optimize $ EqualBool x' y'
     (x', y') -> if x' == y'
       then Val True
@@ -260,11 +245,6 @@ optimize expr = case expr of
     (x', y') -> if x' == y'
       then Val True
       else EqualStr x' y'
-  EqualInt x y -> case (optimize x, optimize y) of
-    (Val a, Val b) -> Val $ a == b
-    (x', y') -> if x' == y'
-      then Val True
-      else EqualInt x' y'
   EqualBool x y -> case (optimize x, optimize y) of
     (Val a, Val b) -> Val $ a == b
     (x', y') -> if x' == y'
@@ -272,10 +252,6 @@ optimize expr = case expr of
       else EqualBool x' y'
   Not x -> case optimize x of
     Val a -> Val $ not a
-    Less a b -> GreaterEqual a b
-    Greater a b -> LessEqual a b
-    LessEqual a b -> Greater a b
-    GreaterEqual a b -> Less a b
     x' -> Not x'
   Read -> Read
   Print xs -> let

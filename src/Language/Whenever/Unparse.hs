@@ -49,18 +49,14 @@ expr atom e = case e of
   Rem x y -> op "%" x y
   Or x y -> op "||" x y
   And x y -> op "&&" x y
-  Less x y -> op "<" x y
-  Greater x y -> op ">" x y
-  LessEqual x y -> op "<=" x y
-  GreaterEqual x y -> op ">=" x y
+  Compare o x y -> op (case o of LT -> "<"; EQ -> "=="; GT -> "<") x y
   Equal x y -> op "==" x y
   EqualStr x y -> op "==" x y
-  EqualInt x y -> op "==" x y
   EqualBool x y -> op "==" x y
   Not (Equal x y) -> op "!=" x y
   Not (EqualStr x y) -> op "!=" x y
-  Not (EqualInt x y) -> op "!=" x y
   Not (EqualBool x y) -> op "!=" x y
+  Not (Compare o x y) -> op (case o of LT -> ">="; EQ -> "!="; GT -> "<=") x y
   Not x -> "!" <> expr True x
   Read -> "read()"
   Print xs -> case xs of

@@ -73,10 +73,10 @@ Expr2 : Expr2 '==' Expr3 { BoolToAny $ Equal $1 $3 }
       | Expr2 '!=' Expr3 { BoolToAny $ Not $ Equal $1 $3 }
       | Expr3 { $1 }
 
-Expr3 : Expr3 '<' Expr4 { BoolToAny $ Less (AnyToInt $1) (AnyToInt $3) }
-      | Expr3 '>' Expr4 { BoolToAny $ Greater (AnyToInt $1) (AnyToInt $3) }
-      | Expr3 '<=' Expr4 { BoolToAny $ LessEqual (AnyToInt $1) (AnyToInt $3) }
-      | Expr3 '>=' Expr4 { BoolToAny $ GreaterEqual (AnyToInt $1) (AnyToInt $3) }
+Expr3 : Expr3 '<' Expr4 { BoolToAny $ Compare LT (AnyToInt $1) (AnyToInt $3) }
+      | Expr3 '>' Expr4 { BoolToAny $ Compare GT (AnyToInt $1) (AnyToInt $3) }
+      | Expr3 '<=' Expr4 { BoolToAny $ Not $ Compare GT (AnyToInt $1) (AnyToInt $3) }
+      | Expr3 '>=' Expr4 { BoolToAny $ Not $ Compare LT (AnyToInt $1) (AnyToInt $3) }
       | Expr4 { $1 }
 
 Expr4 : Expr4 '+' Expr5 { Plus $1 $3 }
