@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script language="javascript" src="lib.js"></script>
+    <script language="javascript" src="rts.js"></script>
+    <script language="javascript" src="lib1.js"></script>
+    <script language="javascript" src="out.js"></script>
+    <script language="javascript" src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+    <script language="javascript" src="jquery.terminal-0.8.7.js"></script>
+    <style type="text/css">
+      textarea { resize: none; }
+    </style>
+  </head>
+  <body>
+    <form>
+      <textarea id="whenever_program" rows="24" cols="50"></textarea>
+      <button   type="button" id="whenever_run" onclick="haskellMain();">Run</button>
+      <textarea id="whenever_output"  rows="24" cols="50"></textarea>
+      <button type="button" onclick="addInput();"></button>
+      <input type="text" id="whenever_input" onkeypress="" />
+    </form>
+  </body>
+  <script language="javascript">
+
+var stored_input = '';
+var callbacks = [];
+
+var checkCallbacks = function() {
+  var callback = callbacks[0];
+  var stored_char = stored_input.charCodeAt(0);
+  if (callback !== undefined && !isNaN(stored_char))
+  {
+    console.log(stored_char);
+    callbacks = callbacks.slice(1);
+    if (callback.consume)
+      stored_input = stored_input.slice(1);
+    callback.fn(stored_char);
+    checkCallbacks();
+  }
+};
+
+var addInput = function() {
+  stored_input += $('#whenever_input').val();
+  $('#whenever_input').val('');
+  checkCallbacks();
+};
+
+var lookAhead = function(callback) {
+  callbacks.push({fn: callback, consume: false});
+  checkCallbacks();
+};
+
+var getChar = function(callback) {
+  callbacks.push({fn: callback, consume: true});
+  checkCallbacks();
+};
+
+var haskellMain = function() {
+  h$main(h$mainZCMainzimain);
+};
+
+$(document).ready(function(){
+
+});
+
+  </script>
+</html>
