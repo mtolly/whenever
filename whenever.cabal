@@ -20,7 +20,7 @@ Library
                     , transformers >= 0.3 && < 0.4
                     , random >= 1.0 && < 1.1
                     , array >= 0.4 && < 0.6
-                    , text >= 0.11 && < 0.12
+                    , text >= 0.11 && < 1.2
   Exposed-Modules:  Language.Whenever
                     Language.Whenever.Base
                     Language.Whenever.Scan
