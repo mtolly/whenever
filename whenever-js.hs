@@ -4,15 +4,11 @@ module Main where
 import GHCJS.Foreign
 import GHCJS.Types
 import Language.Whenever
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<*))
 
 foreign import javascript unsafe
   "document.getElementById('whenever_program').value"
   programContents :: IO JSString
-
-foreign import javascript unsafe
-  "document.getElementById('whenever_output').value = '';"
-  clearOutput :: IO ()
 
 foreign import javascript unsafe
   "document.getElementById('whenever_output').value += $1;"
@@ -21,10 +17,6 @@ foreign import javascript unsafe
 foreign import javascript unsafe
   "Math.floor(Math.random() * $1)"
   randomInt :: Int -> IO Int
-
-foreign import javascript interruptible
-  "setTimeout($c, $1);"
-  delay :: Int -> IO ()
 
 foreign import javascript interruptible
   "lookAhead($c);"
@@ -36,7 +28,6 @@ foreign import javascript interruptible
 
 main :: IO ()
 main = do
-  clearOutput
   prog <- fromString . fromJSString <$> programContents
   let wio = WheneverIO
         { wPrint = outputStr . toJSString

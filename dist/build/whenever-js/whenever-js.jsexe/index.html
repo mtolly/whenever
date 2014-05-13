@@ -30,7 +30,6 @@ var checkCallbacks = function() {
   var stored_char = stored_input.charCodeAt(0);
   if (callback !== undefined && !isNaN(stored_char))
   {
-    console.log(stored_char);
     callbacks = callbacks.slice(1);
     if (callback.consume)
       stored_input = stored_input.slice(1);
@@ -40,7 +39,7 @@ var checkCallbacks = function() {
 };
 
 var addInput = function() {
-  stored_input += $('#whenever_input').val();
+  stored_input += $('#whenever_input').val() + "\n";
   $('#whenever_input').val('');
   checkCallbacks();
 };
@@ -56,12 +55,12 @@ var getChar = function(callback) {
 };
 
 var haskellMain = function() {
+  $('#whenever_input').val('');
+  $('#whenever_output').val('');
+  stored_input = '';
+  callbacks = [];
   h$main(h$mainZCMainzimain);
 };
-
-$(document).ready(function(){
-
-});
 
   </script>
 </html>
