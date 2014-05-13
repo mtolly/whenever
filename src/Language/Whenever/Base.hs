@@ -7,6 +7,7 @@ module Language.Whenever.Base
 , Stmt(..)
 , Program
 , Context
+, WheneverIO(..)
 , Whenever
 , eval
 , count
@@ -22,14 +23,14 @@ module Language.Whenever.Base
 , optimize
 ) where
 
-import Control.Applicative ((<$>), liftA2)
-import Control.Monad (forM_, unless)
+import Control.Monad (forM_, unless, liftM, liftM2)
 import Data.Char (isDigit)
+import Data.Functor (void)
 import Data.Monoid ((<>))
 import System.IO (hLookAhead, stdin)
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.State (StateT, evalStateT, gets, modify)
+import Control.Monad.Trans.RWS (RWST, evalRWST, ask, gets, modify)
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -56,7 +57,7 @@ getInt v = case v of
   Int  i -> i
   Bool b -> if b then 1 else 0
 
-getBool :: Any -> Whenever Bool
+getBool :: (Monad m) => Any -> Whenever m Bool
 getBool v = case v of
   Str  s -> intToBool $ strToInt s
   Int  i -> intToBool i
@@ -106,8 +107,14 @@ data Stmt
   deriving (Eq, Show)
 
 type Program = [(LineNumber, Stmt)]
+data WheneverIO m = WheneverIO
+  { wPrint  :: T.Text -> m ()
+  , wLook   :: m Char
+  , wGet    :: m Char
+  , wRandom :: Int -> m Int
+  }
 type Context = Map.Map LineNumber (Count, Stmt)
-type Whenever = StateT Context IO
+type Whenever m = RWST (WheneverIO m) () Context m
 
 plus :: Any -> Any -> Any
 plus (Str x) y       = Str $ x <> getStr y
@@ -117,58 +124,58 @@ plus x       y       = Int $ getInt x + getInt y
 unwrapStr :: Expr Any -> Maybe (Expr T.Text)
 unwrapStr (Val (Str s)) = Just (Val s)
 unwrapStr (StrToAny e) = Just e
-unwrapStr (If b t f) = liftA2 (If b) (unwrapStr t) (unwrapStr f)
+unwrapStr (If b t f) = liftM2 (If b) (unwrapStr t) (unwrapStr f)
 unwrapStr _ = Nothing
 
 unwrapInt :: Expr Any -> Maybe (Expr Integer)
 unwrapInt (Val (Int i)) = Just (Val i)
 unwrapInt (IntToAny e) = Just e
-unwrapInt (If b t f) = liftA2 (If b) (unwrapInt t) (unwrapInt f)
+unwrapInt (If b t f) = liftM2 (If b) (unwrapInt t) (unwrapInt f)
 unwrapInt _ = Nothing
 
 unwrapBool :: Expr Any -> Maybe (Expr Bool)
 unwrapBool (Val (Bool b)) = Just (Val b)
 unwrapBool (BoolToAny e) = Just e
-unwrapBool (If b t f) = liftA2 (If b) (unwrapBool t) (unwrapBool f)
+unwrapBool (If b t f) = liftM2 (If b) (unwrapBool t) (unwrapBool f)
 unwrapBool _ = Nothing
 
 -- | Evaluates an expression to return a value. This may have side-effects
 -- (executing a 'Language.Whenever.Base.Read' or 'Print' expression) but won't
 -- modify any line's count.
-eval :: Expr a -> Whenever a
+eval :: (Monad m) => Expr a -> Whenever m a
 eval e = case e of
   Val          v   -> return v
-  Append       x y -> liftA2 (<>) (eval x) (eval y)
-  Add          x y -> liftA2 (+)  (eval x) (eval y)
-  Plus         x y -> liftA2 plus (eval x) (eval y)
-  Sub          x y -> liftA2 (-)  (eval x) (eval y)
-  Mult         x y -> liftA2 (*)  (eval x) (eval y)
-  Div          x y -> liftA2 quot (eval x) (eval y)
-  Rem          x y -> liftA2 rem  (eval x) (eval y)
-  Or           x y -> liftA2 (||) (eval x) (eval y)
-  And          x y -> liftA2 (&&) (eval x) (eval y)
-  Compare    o x y -> liftA2 (\a b -> compare a b == o) (eval x) (eval y)
-  Equal        x y -> liftA2 (==) (eval x) (eval y)
-  EqualStr     x y -> liftA2 (==) (eval x) (eval y)
-  EqualBool    x y -> liftA2 (==) (eval x) (eval y)
-  Not          x   -> not <$> eval x
+  Append       x y -> liftM2 (<>) (eval x) (eval y)
+  Add          x y -> liftM2 (+)  (eval x) (eval y)
+  Plus         x y -> liftM2 plus (eval x) (eval y)
+  Sub          x y -> liftM2 (-)  (eval x) (eval y)
+  Mult         x y -> liftM2 (*)  (eval x) (eval y)
+  Div          x y -> liftM2 quot (eval x) (eval y)
+  Rem          x y -> liftM2 rem  (eval x) (eval y)
+  Or           x y -> liftM2 (||) (eval x) (eval y)
+  And          x y -> liftM2 (&&) (eval x) (eval y)
+  Compare    o x y -> liftM2 (\a b -> compare a b == o) (eval x) (eval y)
+  Equal        x y -> liftM2 (==) (eval x) (eval y)
+  EqualStr     x y -> liftM2 (==) (eval x) (eval y)
+  EqualBool    x y -> liftM2 (==) (eval x) (eval y)
+  Not          x   -> not `liftM` eval x
   Read             -> readInput
-  Print        xs  -> mapM eval xs >>= lift . TIO.putStrLn . T.concat >> return 0
+  Print        xs  -> mapM eval xs >>= printAll >> return 0
   N            x   -> eval x >>= count
-  U            x   -> T.singleton . toEnum . fromIntegral <$> eval x
+  U            x   -> (T.singleton . toEnum . fromIntegral) `liftM` eval x
   If         c t f -> eval c >>= \b -> eval $ if b then t else f
-  IntToStr     x   -> T.pack . show <$> eval x
-  StrToInt     x   -> strToInt <$> eval x
-  BoolToInt    x   -> fromIntegral . fromEnum <$> eval x
+  IntToStr     x   -> (T.pack . show) `liftM` eval x
+  StrToInt     x   -> strToInt `liftM` eval x
+  BoolToInt    x   -> (fromIntegral . fromEnum) `liftM` eval x
   IntToBool    x   -> eval x >>= intToBool
-  BoolToStr    x   -> (\b -> if b then "true" else "false") <$> eval x
+  BoolToStr    x   -> (\b -> if b then "true" else "false") `liftM` eval x
   StrToBool    x   -> eval x >>= intToBool . strToInt
-  AnyToStr     x   -> getStr <$> eval x
-  AnyToInt     x   -> getInt <$> eval x
+  AnyToStr     x   -> getStr `liftM` eval x
+  AnyToInt     x   -> getInt `liftM` eval x
   AnyToBool    x   -> eval x >>= getBool
-  StrToAny     x   -> Str <$> eval x
-  IntToAny     x   -> Int <$> eval x
-  BoolToAny    x   -> Bool <$> eval x
+  StrToAny     x   -> Str `liftM` eval x
+  IntToAny     x   -> Int `liftM` eval x
+  BoolToAny    x   -> Bool `liftM` eval x
 
 optimize :: Expr a -> Expr a
 optimize expr = case expr of
@@ -311,45 +318,54 @@ strToInt s = case reads $ T.unpack s of
   [(i, _)] -> i
   _        -> 0
 
-intToBool :: Integer -> Whenever Bool
-intToBool i = (/= 0) <$> count i
+intToBool :: (Monad m) => Integer -> Whenever m Bool
+intToBool i = (/= 0) `liftM` count i
+
+printAll :: (Monad m) => [T.Text] -> Whenever m ()
+printAll ts = do
+  wio <- ask
+  lift $ do
+    mapM_ (wPrint wio) ts
+    wPrint wio "\n"
 
 -- | From standard input, reads either a natural number (sequence of digits),
 -- or a single char (returning its codepoint) if it isn't a digit.
-readInput :: Whenever Integer
-readInput = lift $ hLookAhead stdin >>= \c -> if isDigit c
-  then let
-    readWhile p = hLookAhead stdin >>= \x -> if p x
-      then liftA2 (:) getChar $ readWhile p
-      else return ""
-    in read <$> readWhile isDigit
-  else fromIntegral . fromEnum <$> getChar
+readInput :: (Monad m) => Whenever m Integer
+readInput = do
+  wio <- ask
+  lift $ wLook wio >>= \c -> if isDigit c
+    then let
+      readWhile p = wLook wio >>= \x -> if p x
+        then liftM2 (:) (wGet wio) $ readWhile p
+        else return ""
+      in read `liftM` readWhile isDigit
+    else (fromIntegral . fromEnum) `liftM` wGet wio
 
 -- | Returns the number of copies of a line.
-count :: LineNumber -> Whenever Count
-count n = maybe 0 fst <$> gets (Map.lookup n)
+count :: (Monad m) => LineNumber -> Whenever m Count
+count n = maybe 0 fst `liftM` gets (Map.lookup n)
 
 -- | Sets the number of copies of a line. A negative count sets to zero.
 -- Setting to zero doesn't remove the line from memory; it might be readded
 -- later.
-setCount :: LineNumber -> Count -> Whenever ()
+setCount :: (Monad m) => LineNumber -> Count -> Whenever m ()
 setCount n c = modify $ \m -> case Map.lookup n m of
   Just (_, x) -> Map.insert n (max 0 c, x) m
   Nothing     -> error $ "setCount: unknown line number " ++ show n
 
 -- | Adds to (positive) or subtracts from (negative) a line's number of copies.
-addLine :: LineNumber -> Count -> Whenever ()
+addLine :: (Monad m) => LineNumber -> Count -> Whenever m ()
 addLine n c = count n >>= setCount n . (+ c)
 
 -- | Gets the statement for a line, or error if the line number doesn't exist.
-getStmt :: LineNumber -> Whenever Stmt
-getStmt n = maybe err snd <$> gets (Map.lookup n)
+getStmt :: (Monad m) => LineNumber -> Whenever m Stmt
+getStmt n = maybe err snd `liftM` gets (Map.lookup n)
   where err = error $ "getStmt: unknown line number " ++ show n
 
 -- | Executes a line, and removes one copy of it. A 'Defer' clause means neither
 -- of these things happen. An 'Again' clause means the statement executes, but
 -- it is not removed.
-runLine :: LineNumber -> Whenever ()
+runLine :: (Monad m) => LineNumber -> Whenever m ()
 runLine n = getStmt n >>= go where
   go (Defer x s) = eval x >>= \b -> unless b $ go s
   go (Again x s) = eval x >>= \b -> if b then runStmt s else go s
@@ -358,7 +374,7 @@ runLine n = getStmt n >>= go where
 -- | Executes a statement, without removing its line. A 'Defer' clause means the
 -- statement isn't executed. An 'Again' clause is executed for its side-effects,
 -- but does nothing, because the line won't be removed to begin with.
-runStmt :: Stmt -> Whenever ()
+runStmt :: (Monad m) => Stmt -> Whenever m ()
 runStmt (Defer x s) = eval x >>= \b -> unless b $ runStmt s
 runStmt (Again x s) = eval x >> runStmt s
 runStmt (Commands ls) = forM_ ls $ \(x, y) -> do
@@ -371,24 +387,33 @@ runStmt (Commands ls) = forM_ ls $ \(x, y) -> do
 
 -- | Selects a random line number. Each line with at least one copy has an equal
 -- chance of being selected. Returns Nothing if all lines have zero copies.
-select :: Whenever (Maybe LineNumber)
+select :: (Monad m) => Whenever m (Maybe LineNumber)
 select = do
   xs <- gets Map.toList
   let ns = [ n | (n, (c, _)) <- xs, c /= 0 ]
   case ns of
     [] -> return Nothing
     _ -> do
-      i <- lift $ getStdRandom $ randomR (0, length ns - 1)
+      wio <- ask
+      i <- lift $ wRandom wio $ length ns
       return $ Just $ ns !! i
 
 -- | Runs until no lines have a positive number of copies left.
-run :: Whenever ()
+run :: (Monad m) => Whenever m ()
 run = select >>= maybe (return ()) (\n -> runLine n >> run)
 
 -- | Assigns each line in a program to have 1 copy.
 makeContext :: Program -> Context
 makeContext p = Map.fromList [ (n, (1, s)) | (n, s) <- p ]
 
+standardIO :: WheneverIO IO
+standardIO = WheneverIO
+  { wPrint  = TIO.putStr
+  , wLook   = hLookAhead stdin
+  , wGet    = getChar
+  , wRandom = \n -> getStdRandom $ randomR (0, n - 1)
+  }
+
 -- | Runs a program to completion.
 runProgram :: Program -> IO ()
-runProgram = evalStateT run . makeContext
+runProgram = void . evalRWST run standardIO . makeContext
