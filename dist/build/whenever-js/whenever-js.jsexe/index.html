@@ -6,7 +6,6 @@
     <script language="javascript" src="lib1.js"></script>
     <script language="javascript" src="out.js"></script>
     <script language="javascript" src="//code.jquery.com/jquery-1.11.0.min.js"></script>
-    <script language="javascript" src="jquery.terminal-0.8.7.js"></script>
     <style type="text/css">
       textarea { resize: none; }
     </style>
@@ -18,6 +17,7 @@
       <textarea id="whenever_output"  rows="24" cols="50"></textarea>
       <button type="button" onclick="addInput();"></button>
       <input type="text" id="whenever_input" onkeypress="" />
+      <div id="expecting_input"></div>
     </form>
   </body>
   <script language="javascript">
@@ -25,16 +25,28 @@
 var stored_input = '';
 var callbacks = [];
 
+var setExpecting = function(b) {
+  $('#expecting_input').html(b ? 'Expecting...' : '');
+};
+
 var checkCallbacks = function() {
   var callback = callbacks[0];
   var stored_char = stored_input.charCodeAt(0);
-  if (callback !== undefined && !isNaN(stored_char))
+  if (callback !== undefined)
   {
-    callbacks = callbacks.slice(1);
-    if (callback.consume)
-      stored_input = stored_input.slice(1);
-    callback.fn(stored_char);
-    checkCallbacks();
+    if (isNaN(stored_char))
+    {
+      setExpecting(true);
+    }
+    else
+    {
+      setExpecting(false);
+      callbacks = callbacks.slice(1);
+      if (callback.consume)
+        stored_input = stored_input.slice(1);
+      callback.fn(stored_char);
+      checkCallbacks();
+    }
   }
 };
 
@@ -59,6 +71,7 @@ var haskellMain = function() {
   $('#whenever_output').val('');
   stored_input = '';
   callbacks = [];
+  setExpecting(false);
   h$main(h$mainZCMainzimain);
 };
 
