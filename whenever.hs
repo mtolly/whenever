@@ -10,7 +10,7 @@ main :: IO ()
 main = getArgs >>= \argv -> case argv of
   ["-?"] -> printUsage
   [f]    -> runFile f
-  []     -> getContents >>= runProgram . fromString
+  []     -> getContents >>= runProgramIO . fromString
   _      -> printUsage >> exitFailure
 
 printUsage :: IO ()

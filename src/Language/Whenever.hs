@@ -18,4 +18,4 @@ fromFile :: FilePath -> IO Program
 fromFile = fmap fromString . readFile
 
 runFile :: FilePath -> IO ()
-runFile f = fromFile f >>= runProgram
+runFile f = fromFile f >>= runProgramIO

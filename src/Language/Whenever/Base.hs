@@ -19,13 +19,14 @@ module Language.Whenever.Base
 , select
 , run
 , makeContext
+, standardIO
 , runProgram
+, runProgramIO
 , optimize
 ) where
 
 import Control.Monad (forM_, unless, liftM, liftM2)
 import Data.Char (isDigit)
-import Data.Functor (void)
 import Data.Monoid ((<>))
 import System.IO (hLookAhead, stdin)
 
@@ -415,5 +416,9 @@ standardIO = WheneverIO
   }
 
 -- | Runs a program to completion.
-runProgram :: Program -> IO ()
-runProgram = void . evalRWST run standardIO . makeContext
+runProgram :: (Monad m) => WheneverIO m -> Program -> m ()
+runProgram wio p = evalRWST run wio (makeContext p) >> return ()
+
+-- | Runs a program to completion.
+runProgramIO :: Program -> IO ()
+runProgramIO = runProgram standardIO
