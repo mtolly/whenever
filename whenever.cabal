@@ -9,7 +9,7 @@ Homepage:           http://dangermouse.net/esoteric/whenever.html
 License:            GPL
 License-File:       LICENSE
 Author:             Michael Tolly
-Maintainer:         tolly@wisc.edu
+Maintainer:         miketolly@gmail.com
 Build-Type:         Simple
 Cabal-Version:      >= 1.8
 Category:           Data
@@ -33,12 +33,6 @@ Executable whenever
   Build-Depends:    base >= 4.6 && < 5
                     , whenever
   Main-Is:          whenever.hs
-
-Executable whenever-js
-  Build-Depends:    base >= 4.6 && < 5
-                    , ghcjs-base
-                    , whenever
-  Main-Is:          whenever-js.hs
 
 Source-Repository head
   Type:             git

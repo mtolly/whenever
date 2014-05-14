@@ -1,0 +1,20 @@
+Name:               whenever-js
+Version:            0.1
+Synopsis:           Web interface for the whenever package.
+License:            GPL
+License-File:       LICENSE
+Author:             Michael Tolly
+Maintainer:         miketolly@gmail.com
+Build-Type:         Simple
+Cabal-Version:      >= 1.8
+Category:           Data
+
+Executable whenever-js
+  Build-Depends:    base >= 4.6 && < 5
+                    , ghcjs-base
+                    , whenever
+  Main-Is:          whenever-js.hs
+
+Source-Repository head
+  Type:             git
+  Location:         http://github.com/mtolly/whenever
