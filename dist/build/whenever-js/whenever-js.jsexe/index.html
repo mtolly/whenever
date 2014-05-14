@@ -22,7 +22,6 @@
         height: 90%;
         left: 42%;
         width: 8%;
-        height: 90%;
       }
       #whenever_run {
         width: 90%;
@@ -36,11 +35,12 @@
         left: 50%;
       }
       #whenever_output {
-        height: 80%;
+        height: 90%;
       }
       #whenever_input {
         font-size: 20px;
         margin: 10px;
+        width: 70%;
       }
       #whenever_enter {
         font-size: 20px;
@@ -58,14 +58,14 @@
   <body>
     <form>
       <div id="program_pane">
-        <textarea id="whenever_program" rows="24" cols="50"></textarea>
+        <textarea id="whenever_program" rows="24" cols="50" placeholder="Type a Whenever program here"></textarea>
       </div>
       <div id="button_pane">
         <button type="button" id="whenever_run" onclick="haskellMain();">Run</button>
       </div>
       <div id="run_pane">
-        <textarea id="whenever_output" rows="24" cols="50"></textarea>
-        <input id="whenever_input" type="text" />
+        <textarea id="whenever_output" rows="24" cols="50" placeholder="Output comes out here"></textarea>
+        <input id="whenever_input" type="text" placeholder="Type stdin here" />
         <button id="whenever_enter" type="button" onclick="addInput();">Enter</button>
         <div id="expecting_input"></div>
       </div>
