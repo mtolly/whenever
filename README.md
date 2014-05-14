@@ -7,7 +7,10 @@ sequence specified by the programmer.
 Interpreter in Haskell by [Michael Tolly](mailto:miketolly@gmail.com).
 For language information, see [David's website](http://dangermouse.net/esoteric/whenever.html).
 
-## Installation
+[Now available to use online](http://pages.cs.wisc.edu/~tolly/whenever-js.jsexe/)
+via a Haskell-to-JavaScript compiler!
+
+## Installation (library and command line app)
 
 1.  Install the [Haskell Platform](http://www.haskell.org/platform/).
     Or, install `ghc`, `cabal`, `alex`, and `happy`.
