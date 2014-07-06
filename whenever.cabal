@@ -1,5 +1,5 @@
 Name:               whenever
-Version:            0.1
+Version:            0.2
 Synopsis:           A language that processes instructions whenever.
 Description:        Whenever is an esoteric programming language, created by
                     David Morgan-Mar, which has no sense of urgency. It does
